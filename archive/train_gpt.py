@@ -13,17 +13,7 @@ import tiktoken
 
 from dataclasses import dataclass
 
-@dataclass
-class GPTConfig:
-    vocab_size = 50257
-    max_len = 1024
-    num_heads : int
-    num_layers : int
-    embed_dim : int
-    add_bias_qkv = False
-    attn_dropout = 0.1
-    embed_dropout = 0.1
-    resid_dropout = 0.1
+
 
 
 class MyMultiheadAttention(nn.Module):
@@ -147,10 +137,6 @@ class NIPSDataset(Dataset):
     def __getitem__(self, idx):
         return self.chunks[idx][:-1], self.chunks[idx][1:]
 
-@dataclass
-class OptimizerConfig:
-    learning_rate: float = 3e-4
-    weight_decay: float = 0.1
 
 
 def calc_cross_entropy(xs, ys, model, device):
