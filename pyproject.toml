@@ -9,6 +9,7 @@ dependencies = [
     "datasets>=4.5.0",
     "ipykernel>=7.2.0",
     "jupyterlab>=4.5.4",
+    "lightning>=2.6.1",
     "matplotlib>=3.10.8",
     "numpy>=2.3.5",
     "pandas>=3.0.1",
