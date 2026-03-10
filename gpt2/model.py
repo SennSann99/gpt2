@@ -23,8 +23,8 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         bsz, seqlen, channels = x.shape
-        qkv = self.qkv(x)
-        q, k, v = qkv.split(channels, dim=-1)
+        qkv = self.qkv(x) # So, the shape of the qkv tensor becomes (bsz, seqlen, 3 * channels)
+        q, k, v = qkv.split(channels, dim=-1) # The .split(channels, dim=-1) function tells PyTorch to take that last dimension (which is currently 3 * channels wide) and chop it into equal chunks of size channels.
 
         q = q.view(bsz, seqlen, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(bsz, seqlen, self.n_head, self.head_dim).transpose(1, 2)
@@ -40,6 +40,24 @@ class CausalSelfAttention(nn.Module):
         y = y.transpose(1, 2).contiguous().view(bsz, seqlen, channels)
         return self.resid_dropout(self.proj(y))
 
+"""
+1. The Raw Attention Scores (att)
+Right before this line, your code calculates the raw attention scores (often called logits) by taking the dot product of the Queries ($Q$) and Keys ($K$).
+At this stage, att contains scores representing how much every token in your sequence "wants" to look at every other token.
+
+
+2. The Inverted Mask (~mask)
+If you look up in your __init__ function, self.causal_mask is created using torch.tril() (triangle-lower). 
+This creates a matrix of booleans where the diagonal and everything below it is True, and everything above it is False.
+
+The tilde (~) is PyTorch's logical NOT operator. By doing ~mask, you flip the boolean values. Now, the upper right triangle of the matrix becomes True. 
+These True values spatially correspond to the "future" tokens in the sequence.
+
+
+3. Masking with Negative Infinity (float("-inf"))
+The .masked_fill() function looks at your raw att tensor and says: 
+"Wherever the flipped mask is True (the future tokens), overwrite the existing score with negative infinity ($-\infty$)."
+"""
 
 class MLP(nn.Module):
     def __init__(self, cfg: ModelConfig):

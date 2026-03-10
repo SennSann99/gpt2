@@ -1,5 +1,17 @@
 from dataclasses import dataclass
 
+"""
+1. The @dataclass Decorator
+When you put @dataclass above a class, Python automatically writes all the tedious background code for you. 
+You don't have to write an __init__ method, a representation method (__repr__), or equality checks. 
+Python looks at your variables and handles the rest behind the scenes.
+
+2. The slots=True Optimization
+This is a specific performance feature (introduced in Python 3.10). 
+Normally, Python classes store their attributes in a dynamic dictionary (__dict__), which takes up extra memory. 
+Adding slots=True tells Python: "I am only going to use exactly these variables, lock it down." 
+* The Benefit: It prevents the creation of the underlying dictionary, saving memory and making accessing these variables slightly faster.
+"""
 
 @dataclass(slots=True)
 class ModelConfig:
