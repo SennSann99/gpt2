@@ -31,4 +31,4 @@ class TrainConfig:
     seed: int = 1337
     num_workers: int = 0
     amp: bool = True
-    checkpoint_path: str = "checkpoints/gpt2.ckpt"
+    checkpoint_path: str = "checkpoints/last.ckpt"

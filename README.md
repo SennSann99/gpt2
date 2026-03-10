@@ -44,4 +44,4 @@ uv run python pl_main.py \
 
 - Expects a CSV with a `PaperText` column by default.
 - Default dataset path: `data/Papers.csv`.
-- Checkpoint is written to `checkpoints/gpt2.ckpt`.
+- Checkpoint is written to `checkpoints/last.ckpt`.

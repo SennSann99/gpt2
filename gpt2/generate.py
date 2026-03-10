@@ -10,7 +10,7 @@ from gpt2.model import GPTLightning
 
 def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
     parser = argparse.ArgumentParser(description="Generate text from a trained GPT-2 model")
-    parser.add_argument("--checkpoint-path", default="checkpoints/gpt2.ckpt")
+    parser.add_argument("--checkpoint-path", default="checkpoints/last.ckpt")
     parser.add_argument("--block-size", type=int, default=256)
     parser.add_argument("--n-layer", type=int, default=12)
     parser.add_argument("--n-head", type=int, default=12)

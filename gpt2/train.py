@@ -40,7 +40,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--no-amp", action="store_true")
-    parser.add_argument("--checkpoint-path", default="checkpoints/gpt2.ckpt")
+    parser.add_argument("--checkpoint-path", default="checkpoints/last.ckpt")
 
     args = parser.parse_args()
 
