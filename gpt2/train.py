@@ -90,7 +90,7 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         filename=ckpt_path.stem,
         monitor="val_loss",
         mode="min",
-        save_top_k=1,
+        save_top_k=0,
         save_last=True,
     )
     logger = CSVLogger(save_dir="logs", name="gpt2")
@@ -112,9 +112,6 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
     )
 
     trainer.fit(module, datamodule=datamodule)
-
-    trainer.save_checkpoint(str(ckpt_path))
-    print(f"saved checkpoint: {ckpt_path}")
 
 
 def main() -> None:
