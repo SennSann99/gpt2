@@ -1,27 +1,60 @@
 # Compact GPT-2 (PyTorch Lightning)
 
-A compact, research-minded GPT-2 implementation built for an AI graduate student workflow: clear internals, reproducible experiments, and a strong bias toward scalable training via PyTorch Lightning.
+A minimal, research-oriented GPT-2 implementation designed for graduate-level AI work — clear internals, reproducible experiments, and clean scaling paths via PyTorch Lightning.
 
-## Why this repo exists
+---
 
-- Learn the core mechanics of GPT-2 by reading real, minimal code.
-- Iterate quickly with clean configs and an easy CLI.
-- Keep scaling paths open (multi-GPU / distributed) without rewriting the training loop.
+## Motivation
 
-## What’s inside
+- Study the core mechanics of GPT-2 through readable, minimal code.
+- Iterate quickly with clean dataclass configs and a straightforward CLI.
+- Keep multi-GPU / distributed training paths open without rewriting the training loop.
 
-- GPT-2 style model with causal attention implemented using `einsum`
-- Clean dataclass configs for model + training
-- PyTorch Lightning `Trainer` and `LightningModule`
-- Weight tying
-- AdamW param grouping + warmup
-- Deterministic seeding + simple CSV logging
+---
 
-## Parallelism mindset
+## Features
 
-This project leans on PyTorch Lightning so you can scale from a laptop to multi-GPU setups with minimal code changes. The training loop stays clean while Lightning handles device placement, DDP setup, and mixed precision where available.
+| Component | Details |
+|---|---|
+| Model | GPT-2 style transformer with causal self-attention via `einsum` |
+| Config | Typed dataclasses for model and training hyperparameters |
+| Training | PyTorch Lightning `Trainer` + `LightningModule` |
+| Optimizer | AdamW with parameter group weight decay + linear warmup |
+| Tokenization | `tiktoken` (GPT-2 encoding) |
+| Logging | CSV logger to `logs/`; TensorBoard-compatible |
+| Reproducibility | Deterministic seeding |
 
-## Quick start
+---
+
+## Project Structure
+
+```
+gpt2/
+├── config.py      # Model and training config dataclasses
+├── data.py        # CSV → token chunks → DataLoaders
+├── model.py       # GPT model + LightningModule
+├── train.py       # Lightning Trainer entrypoint (recommended)
+└── generate.py    # Text generation entrypoint
+main.py            # Convenience entrypoint (train + generate)
+```
+
+---
+
+## Requirements
+
+- Python ≥ 3.12
+- [`uv`](https://github.com/astral-sh/uv) (recommended) or `pip`
+- PyTorch ≥ 2.5, Lightning ≥ 2.6
+
+Install dependencies:
+
+```bash
+uv sync
+```
+
+---
+
+## Quick Start
 
 ```bash
 uv run python -m gpt2.train \
@@ -30,7 +63,7 @@ uv run python -m gpt2.train \
   --batch-size 2
 ```
 
-## Smoke run (fast check)
+### Smoke Test (fast sanity check)
 
 ```bash
 uv run python -m gpt2.train \
@@ -45,18 +78,24 @@ uv run python -m gpt2.train \
   --eval-batches 1
 ```
 
-## Project structure
+---
 
-- `main.py`: convenience entrypoint (train + generate)
-- `gpt2/config.py`: model/train configs
-- `gpt2/data.py`: CSV -> token chunks -> dataloaders
-- `gpt2/model.py`: GPT model + LightningModule
-- `gpt2/train.py`: Lightning trainer entrypoint (recommended)
-- `gpt2/generate.py`: text generation entrypoint
+## Data Format
 
-## Notes
+- Expects a CSV file with a `PaperText` column (e.g., academic abstracts or full papers).
+- Default dataset path: `data/Papers.csv`
 
-- Expects a CSV with a `PaperText` column by default.
-- Default dataset path: `data/Papers.csv`.
-- Checkpoint is written to `checkpoints/last.ckpt`.
-- Logs are written to `logs/` via `CSVLogger`.
+---
+
+## Outputs
+
+| Artifact | Path |
+|---|---|
+| Latest checkpoint | `checkpoints/last.ckpt` |
+| Training logs | `logs/` |
+
+---
+
+## Parallelism
+
+Training is built on PyTorch Lightning, so scaling from a single CPU/GPU to multi-GPU DDP requires no changes to the training loop. Lightning handles device placement, DDP setup, and mixed precision automatically.
