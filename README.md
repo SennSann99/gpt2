@@ -1,5 +1,13 @@
 # Compact GPT-2 (PyTorch Lightning)
 
+## News
+
+| Date | Update |
+|---|---|
+| 2026-03-15 | Replaced positional encoding with Rotary Position Embedding (RoPE) |
+
+
+
 A minimal, research-oriented GPT-2 implementation designed for graduate-level AI work — clear internals, reproducible experiments, and clean scaling paths via PyTorch Lightning.
 
 ---

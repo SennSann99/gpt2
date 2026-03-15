@@ -6,7 +6,68 @@ from dataclasses import asdict
 
 from gpt2.config import ModelConfig
 
+class RotaryPositionalEmbedding(nn.Module):
+    """
+    Rotary Position Embedding (RoPE) — Su et al., 2021.
+    Precomputes cos/sin tables; applied to Q and K inside attention (not token embeddings).
+    """
+    def __init__(self, head_dim: int, max_seq_len: int):
+        super().__init__()
+        # θ_i = 1 / 10000^(2i / head_dim), shape: (head_dim // 2,)
+        theta = 1.0 / (10000 ** (torch.arange(0, head_dim, 2).float() / head_dim))
+        # shape: (max_seq_len,)
+        positions = torch.arange(max_seq_len).float()
+        # freqs[m, i] = m * θ_i, shape: (max_seq_len, head_dim // 2)
+        freqs = torch.outer(positions, theta)
+        # Duplicate so each pair of dimensions (2i, 2i+1) shares the same angle
+        cos = torch.cat([freqs.cos(), freqs.cos()], dim=-1)  # (max_seq_len, head_dim)
+        sin = torch.cat([freqs.sin(), freqs.sin()], dim=-1)
+        self.register_buffer("cos_cache", cos)
+        self.register_buffer("sin_cache", sin)
 
+    def forward(self, seqlen: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return (cos, sin) tables for the first `seqlen` positions."""
+        return self.cos_cache[:seqlen], self.sin_cache[:seqlen]
+
+
+def _rotate_half(x: torch.Tensor) -> torch.Tensor:
+    """
+    Swap and negate the two halves of the last dimension for RoPE rotation.
+    Example:
+        Since x: (bsz, n_head, seqlen, head_dim), Let's say head_dim = 8,
+        Step 1: x1 = x[..., :4] → [x0, x1, x2, x3]  (shape: 4)
+        Step 2: x2 = x[..., 4:] → [x4, x5, x6, x7]  (shape: 4)
+        Step 3: torch.cat([-x2, x1], dim=-1) → [-x4, -x5, -x6, -x7, x0, x1, x2, x3]  (shape: 8, same as original)
+    """
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    # Concatenates the given sequence of tensors
+    return torch.cat([-x2, x1], dim=-1)
+
+
+def apply_rotary_emb(
+    x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
+) -> torch.Tensor:
+    """
+    Apply RoPE rotation to Q or K.
+    Args:
+        x:   (bsz, n_head, seqlen, head_dim)
+        cos: (seqlen, head_dim)
+        sin: (seqlen, head_dim)
+    """
+    cos = cos.unsqueeze(0).unsqueeze(0)  # (1, 1, seqlen, head_dim)
+    sin = sin.unsqueeze(0).unsqueeze(0)
+
+    """
+    For position i in the first half (say i=0):
+        result[0] = x0 * cos(mθ₀) + (-x4) * sin(mθ₀)
+          = x0·cos − x4·sin    ✓ this is the rotation formula!
+    For its partner at position i + d/2 (i=4):
+        result[4] = x4 * cos(mθ₀) + x0 * sin(mθ₀)
+          = x4·cos + x0·sin    ✓ the other half of the rotation!
+    """
+    return x * cos + _rotate_half(x) * sin  # x*cos produces [x1·cos, x2·cos], _rotate_half(x)*sin produces [-x2·sin, x1·sin]
+    
 class CausalSelfAttention(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -18,6 +79,7 @@ class CausalSelfAttention(nn.Module):
         self.qkv = nn.Linear(cfg.n_embd, 3 * cfg.n_embd, bias=cfg.bias)
         self.proj = nn.Linear(cfg.n_embd, cfg.n_embd, bias=cfg.bias)
         self.resid_dropout = nn.Dropout(cfg.dropout)
+        self.rope = RotaryPositionalEmbedding(self.head_dim, cfg.block_size)
         mask = torch.tril(torch.ones(cfg.block_size, cfg.block_size, dtype=torch.bool))
         self.register_buffer("causal_mask", mask.view(1, 1, cfg.block_size, cfg.block_size))
 
@@ -29,6 +91,11 @@ class CausalSelfAttention(nn.Module):
         q = q.view(bsz, seqlen, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(bsz, seqlen, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(bsz, seqlen, self.n_head, self.head_dim).transpose(1, 2)
+
+        # Apply RoPE to Q and K (not V)
+        cos, sin = self.rope(seqlen)
+        q = apply_rotary_emb(q, cos, sin) 
+        k = apply_rotary_emb(k, cos, sin) 
 
         att = torch.einsum("bhid,bhjd->bhij", q, k)
         att = att * (self.head_dim**-0.5)
@@ -93,7 +160,6 @@ class GPTModel(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.n_embd)
-        self.pos_embedding = nn.Embedding(cfg.block_size, cfg.n_embd)
         self.dropout = nn.Dropout(cfg.dropout)
         self.blocks = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layer)])
         self.ln_f = nn.LayerNorm(cfg.n_embd)
@@ -117,8 +183,7 @@ class GPTModel(nn.Module):
         if seqlen > self.cfg.block_size:
             raise ValueError(f"Sequence length {seqlen} > block_size {self.cfg.block_size}")
 
-        pos = torch.arange(0, seqlen, device=idx.device)
-        x = self.token_embedding(idx) + self.pos_embedding(pos)
+        x = self.token_embedding(idx)
         x = self.dropout(x)
         for block in self.blocks:
             x = block(x)
