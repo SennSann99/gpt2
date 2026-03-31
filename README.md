@@ -22,7 +22,7 @@ A minimal, research-oriented GPT-2 implementation designed for graduate-level AI
 
 ## Features
 
-| Component | Details |
+| Component | detale(詳細) |
 |---|---|
 | Model | GPT-2 style transformer with causal self-attention via `einsum` |
 | Config | Typed dataclasses for model and training hyperparameters |
