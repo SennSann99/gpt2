@@ -1,9 +1,9 @@
 const routes = {
-  'index': 'index.md',
-  'architecture': 'architecture.md',
-  'data_pipeline': 'data_pipeline.md',
-  'training_and_generation': 'training_and_generation.md',
-  'configuration': 'configuration.md'
+  'index': 'pages/index.md',
+  'architecture': 'pages/architecture.md',
+  'data_pipeline': 'pages/data_pipeline.md',
+  'training_and_generation': 'pages/training_and_generation.md',
+  'configuration': 'pages/configuration.md'
 };
 
 const contentDiv = document.getElementById('content');
