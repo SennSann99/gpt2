@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT-2 Documentation</title>
+    <!-- Add SEO and Presentation metadata -->
+    <meta name="description" content="Documentation for the minimal PyTorch Lightning GPT-2 implementation.">
+    
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    
+    <!-- KaTeX for Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <aside id="sidebar">
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12h4l3-9 5 18 3-9h5"/>
+            </svg>
+            GPT-2 Docs
+        </div>
+        <nav>
+            <ul>
+                <li><a href="#index" data-page="index">Overview & Index</a></li>
+                <li><a href="#architecture" data-page="architecture">Architecture</a></li>
+                <li><a href="#data_pipeline" data-page="data_pipeline">Data Pipeline</a></li>
+                <li><a href="#training_and_generation" data-page="training_and_generation">Training & Gen</a></li>
+                <li><a href="#configuration" data-page="configuration">Configuration</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main id="main-wrapper">
+        <div id="content">
+            <!-- Markdown content will be dynamically loaded here by app.js -->
+            <div class="loader"></div>
+        </div>
+    </main>
+
+    <!-- App Logic -->
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 980" style="background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#586069" />
+    </marker>
+    <!-- CSS properties -->
+    <style>
+      .box { fill: #f6f8fa; stroke: #d1d5da; stroke-width: 2px; rx: 6px; }
+      .box-text { fill: #24292e; font-size: 15px; text-anchor: middle; dominant-baseline: middle; font-weight: 500; }
+      .circle { fill: #ffffff; stroke: #d1d5da; stroke-width: 2px; }
+      .line { fill: none; stroke: #586069; stroke-width: 2px; }
+      .dashed { stroke-dasharray: 6,4; }
+      .group-box { fill: #fafbfc; stroke: #e1e4e8; stroke-width: 2px; stroke-dasharray: 5,5; rx: 8px; }
+      .group-title { fill: #6a737d; font-size: 14px; font-weight: bold; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" class="box-text" style="font-size: 20px; font-weight: bold;">GPTModel Architecture Flow</text>
+
+  <!-- Group for Transformer Block -->
+  <rect x="230" y="260" width="340" height="450" class="group-box" />
+  <text x="245" y="285" class="group-title">Transformer Block (× n_layer)</text>
+
+  <!-- ==================== Nodes ==================== -->
+  
+  <!-- Input -->
+  <rect x="300" y="60" width="200" height="44" class="box" />
+  <text x="400" y="82" class="box-text">Input Tokens (idx)</text>
+
+  <!-- Token Embedding -->
+  <rect x="300" y="134" width="200" height="44" class="box" />
+  <text x="400" y="156" class="box-text">Token Embedding</text>
+
+  <!-- Dropout -->
+  <rect x="300" y="208" width="200" height="44" class="box" />
+  <text x="400" y="230" class="box-text">Dropout</text>
+
+  <!-- Block Nodes -->
+  <rect x="300" y="310" width="200" height="44" class="box" />
+  <text x="400" y="332" class="box-text">Layer Norm</text>
+
+  <rect x="300" y="384" width="200" height="44" class="box" />
+  <text x="400" y="406" class="box-text">Causal Self-Attention (RoPE)</text>
+
+  <circle cx="400" cy="470" r="16" class="circle" />
+  <text x="400" y="472" class="box-text" style="font-size: 20px;">+</text>
+
+  <rect x="300" y="524" width="200" height="44" class="box" />
+  <text x="400" y="546" class="box-text">Layer Norm</text>
+
+  <rect x="300" y="598" width="200" height="44" class="box" />
+  <text x="400" y="620" class="box-text">MLP (GELU)</text>
+
+  <circle cx="400" cy="684" r="16" class="circle" />
+  <text x="400" y="686" class="box-text" style="font-size: 20px;">+</text>
+
+  <!-- Post Block -->
+  <rect x="300" y="760" width="200" height="44" class="box" />
+  <text x="400" y="782" class="box-text">Final Layer Norm</text>
+
+  <rect x="300" y="834" width="200" height="44" class="box" />
+  <text x="400" y="856" class="box-text">LM Head (Weight Tying)</text>
+
+  <rect x="300" y="908" width="200" height="44" class="box" />
+  <text x="400" y="930" class="box-text">Logits Output</text>
+
+  <!-- ==================== Edges ==================== -->
+  
+  <path d="M 400 104 L 400 128" class="line" marker-end="url(#arrow)" />
+  <path d="M 400 178 L 400 202" class="line" marker-end="url(#arrow)" />
+  <path d="M 400 252 L 400 304" class="line" marker-end="url(#arrow)" />
+  
+  <path d="M 400 354 L 400 378" class="line" marker-end="url(#arrow)" />
+  <path d="M 400 428 L 400 448" class="line" marker-end="url(#arrow)" />
+  
+  <path d="M 400 486 L 400 518" class="line" marker-end="url(#arrow)" />
+  <path d="M 400 568 L 400 592" class="line" marker-end="url(#arrow)" />
+  <path d="M 400 642 L 400 662" class="line" marker-end="url(#arrow)" />
+  
+  <path d="M 400 700 L 400 754" class="line" marker-end="url(#arrow)" />
+  <path d="M 400 804 L 400 828" class="line" marker-end="url(#arrow)" />
+  <path d="M 400 878 L 400 902" class="line" marker-end="url(#arrow)" />
+
+  <!-- Residual Connections -->
+  
+  <!-- Dropout to Add 1 -->
+  <!-- Branching from Y = 280 (Main line goes from 252 to 304) -->
+  <path d="M 400 280 L 260 280 L 260 470 L 378 470" class="line dashed" marker-end="url(#arrow)" />
+  <text x="260" y="375" class="box-text" style="fill: #6a737d; text-anchor: end;" transform="translate(-10, 0)">Residual</text>
+
+  <!-- Add 1 to Add 2 -->
+  <!-- Branching from Y = 502 (Main line goes from 486 to 518) -->
+  <path d="M 400 502 L 260 502 L 260 684 L 378 684" class="line dashed" marker-end="url(#arrow)" />
+  <text x="260" y="593" class="box-text" style="fill: #6a737d; text-anchor: end;" transform="translate(-10, 0)">Residual</text>
+
+</svg>
