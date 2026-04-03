@@ -26,17 +26,4 @@
    - `ModelConfig` および `TrainConfig` それぞれのパラメータ一覧
    - `@dataclass(slots=True)` による最適化機構
 
-## プロジェクトの全体構造
-
-```mermaid
-graph TD
-    A[main.py] -->|学習時| B(gpt2/train.py)
-    A -->|推論時| C(gpt2/generate.py)
-    B --> D{設定 (config.py)}
-    B --> E[モデル (model.py)]
-    B --> F[データ (data.py)]
-    C --> D
-    C --> E
-```
-
 各ドキュメントを通じて、このプロジェクトの意図と実装の裏にあるアイデアを網羅的に確認できる。学習・研究したい部分のリンクを参照されたい。

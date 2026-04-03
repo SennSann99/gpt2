@@ -3,7 +3,8 @@ const routes = {
   'architecture': 'pages/architecture.md',
   'data_pipeline': 'pages/data_pipeline.md',
   'training_and_generation': 'pages/training_and_generation.md',
-  'configuration': 'pages/configuration.md'
+  'configuration': 'pages/configuration.md',
+  'api_reference': 'pages/api_reference.md'
 };
 
 const contentDiv = document.getElementById('content');
