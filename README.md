@@ -62,7 +62,23 @@ uv sync
 
 ---
 
-## Quick Start
+## Quick Start (docker)
+
+Build:
+```bash
+docker build -t gpt2-project .
+```
+
+Start a tmux session (optional):
+```bash
+tmux new -s gpt2
+```
+
+Run with GPU:
+```bash
+docker run --rm -it --gpus all gpt2-project
+```
+## Quick Start (uv)
 
 ```bash
 uv run python -m gpt2.train \
