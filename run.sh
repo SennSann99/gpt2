@@ -33,7 +33,7 @@ if [ "$USE_GPU" = true ]; then
 fi
 
 # 実行コマンドの構築
-RUN_CMD="docker run --rm -it $GPU_OPT \
+RUN_CMD="docker run --rm --init -it $GPU_OPT \
     -v \"$PROJECT_ROOT/logs:/workspace/logs\" \
     -v \"$PROJECT_ROOT/checkpoints:/workspace/checkpoints\" \
     -v \"$PROJECT_ROOT/data:/workspace/data\" \
@@ -51,9 +51,16 @@ if [ "$USE_TMUX" = true ]; then
         tmux attach-session -t "$SESSION_NAME"
     else
         echo "🖥️  Starting new tmux session '$SESSION_NAME'..."
+        # tmux の場合はセッション維持のため exec ではなく普通に実行
         tmux new-session -s "$SESSION_NAME" "$RUN_CMD"
     fi
 else
     echo "🐳 Running container..."
-    eval "$RUN_CMD"
+    # exec を使うことでシグナルが直接 Docker に届くようにする
+    exec docker run --rm --init -it $GPU_OPT \
+        -v "$PROJECT_ROOT/logs:/workspace/logs" \
+        -v "$PROJECT_ROOT/checkpoints:/workspace/checkpoints" \
+        -v "$PROJECT_ROOT/data:/workspace/data" \
+        -e PYTHONUNBUFFERED=1 \
+        $IMAGE_NAME
 fi

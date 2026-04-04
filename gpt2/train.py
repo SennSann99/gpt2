@@ -1,4 +1,8 @@
 import argparse
+import os
+import signal
+import sys
+import warnings
 from pathlib import Path
 
 import lightning.pytorch as pl
@@ -75,6 +79,10 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     return model_cfg, train_cfg
 
 
+# グローバルで保存フラグを管理（重複阻止）
+_SAVING_FINAL = False
+
+
 def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
     pl.seed_everything(train_cfg.seed, workers=True)
 
@@ -82,16 +90,14 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
     datamodule = GPTDataModule(train_cfg, model_cfg, tokenizer)
     module = GPTLightning(model_cfg, train_cfg)
 
-    ckpt_path = Path(train_cfg.checkpoint_path)
+    ckpt_path = Path(train_cfg.checkpoint_path).resolve()
     ckpt_path.parent.mkdir(parents=True, exist_ok=True)
 
     checkpoint_cb = ModelCheckpoint(
         dirpath=str(ckpt_path.parent),
         filename=ckpt_path.stem,
-        monitor="val_loss",
-        mode="min",
-        save_top_k=0,
         save_last=True,
+        every_n_train_steps=train_cfg.eval_interval,
     )
     logger = CSVLogger(save_dir="logs", name="gpt2")
 
@@ -111,7 +117,39 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         log_every_n_steps=1,
     )
 
-    trainer.fit(module, datamodule=datamodule)
+    def handle_signal(sig, frame):
+        global _SAVING_FINAL
+        if _SAVING_FINAL:
+            return
+        _SAVING_FINAL = True
+
+        # 以降のシグナルを完全に無視
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        
+        print(f"\n[INFO] 保存を開始しています: {ckpt_path.name}")
+        sys.stdout.flush()
+        
+        try:
+            # 不要な警告を非表示にして保存
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*weights_only.*")
+                trainer.save_checkpoint(str(ckpt_path))
+            print(f"[INFO] 保存が完了しました: {ckpt_path.name}")
+        except Exception as e:
+            print(f"[ERROR] 保存失敗: {e}")
+        
+        sys.stdout.flush()
+        # os._exit を使い、後続のバリデーション等の処理を全てバイパスして終了
+        os._exit(0)
+
+    signal.signal(signal.SIGINT, handle_signal)
+
+    try:
+        trainer.fit(module, datamodule=datamodule)
+    except KeyboardInterrupt:
+        # シグナルハンドラが動かなかった場合の保険
+        if not _SAVING_FINAL:
+            handle_signal(None, None)
 
 
 def main() -> None:
