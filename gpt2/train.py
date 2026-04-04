@@ -81,9 +81,11 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
 
 # グローバルで保存フラグを管理（重複阻止）
 _SAVING_FINAL = False
+warnings.filterwarnings("ignore", message=".*weights_only.*")
 
 
 def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
+    main_pid = os.getpid()
     pl.seed_everything(train_cfg.seed, workers=True)
 
     tokenizer = tiktoken.get_encoding("gpt2")
@@ -123,23 +125,19 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
             return
         _SAVING_FINAL = True
 
-        # 以降のシグナルを完全に無視
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        
-        print(f"\n[INFO] 保存を開始しています: {ckpt_path.name}")
+        if os.getpid() != main_pid:
+            os._exit(0)
+
+        print(f"\n[INFO] 学習を中断して保存しています: {ckpt_path.name}")
         sys.stdout.flush()
         
         try:
-            # 不要な警告を非表示にして保存
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", message=".*weights_only.*")
-                trainer.save_checkpoint(str(ckpt_path))
+            trainer.save_checkpoint(str(ckpt_path))
             print(f"[INFO] 保存が完了しました: {ckpt_path.name}")
         except Exception as e:
             print(f"[ERROR] 保存失敗: {e}")
         
         sys.stdout.flush()
-        # os._exit を使い、後続のバリデーション等の処理を全てバイパスして終了
         os._exit(0)
 
     signal.signal(signal.SIGINT, handle_signal)
@@ -147,7 +145,6 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
     try:
         trainer.fit(module, datamodule=datamodule)
     except KeyboardInterrupt:
-        # シグナルハンドラが動かなかった場合の保険
         if not _SAVING_FINAL:
             handle_signal(None, None)
 
