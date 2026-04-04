@@ -62,6 +62,20 @@ uv sync
 
 ---
 
+## Documentation
+
+A local documentation server is provided to browse project details and research notes.
+
+```bash
+./open_docs.sh
+```
+
+- **Port**: Default is 8080.
+- **Auto-open**: The script attempts to open your default browser automatically. If it doesn't open, manually access [http://localhost:8080](http://localhost:8080).
+- **No-cache**: The server is configured to prevent caching, ensuring you always see the latest content.
+
+---
+
 ### Option 1: Using run.sh (Recommended)
 
 The `run.sh` script automates image building and container execution with optional GPU and tmux support.
@@ -92,6 +106,8 @@ docker build -t gpt2 .
 # Run with GPU and automatic removal
 docker run --rm -it --gpus all gpt2
 ```
+
+---
 
 ## Quick Start (uv)
 
