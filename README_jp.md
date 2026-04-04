@@ -102,6 +102,41 @@ uv run python -m gpt2.train \
 
 ---
 
+## Dockerでの実行 (run.sh)
+
+### 方法1: run.sh を使用する (推奨)
+
+Dockerを利用して、ビルドから実行（GPU・tmux対応）までを自動化するスクリプトを用意しています。
+
+```bash
+# 基本的な実行 (CPU)
+./run.sh
+
+# GPUを使用して実行
+./run.sh gpu
+
+# tmuxセッション内で実行
+./run.sh tmux
+
+# GPUを使用し、かつtmuxセッション内で実行
+./run.sh gpu tmux
+```
+
+- **自動削除**: コンテナ終了時に `--rm` オプションによりコンテナは自動的に削除されます。
+- **永続化**: `logs/`, `checkpoints/`, `data/` ディレクトリはホスト側にマウントされ、データが保持されます。
+
+### 方法2: 手動でコマンドを実行する
+
+```bash
+# ビルド
+docker build -t gpt2 .
+
+# GPUを使用して実行 (終了時に自動削除)
+docker run --rm -it --gpus all gpt2
+```
+
+---
+
 ## 並列処理
 
 学習はPyTorch Lightning上に構築されているため，単一のCPU/GPUからマルチGPUのDDP（Distributed Data Parallel）へのスケーリングにおいて，学習ループを変更する必要はありません．Lightningがデバイスの配置，DDPのセットアップ，および自動混合精度（Mixed Precision）を自動的に処理します．

@@ -62,22 +62,37 @@ uv sync
 
 ---
 
-## Quick Start (docker)
+### Option 1: Using run.sh (Recommended)
 
-Build:
+The `run.sh` script automates image building and container execution with optional GPU and tmux support.
+
 ```bash
-docker build -t gpt2-project .
+# Basic run (CPU)
+./run.sh
+
+# Run with GPU
+./run.sh gpu
+
+# Run inside a tmux session
+./run.sh tmux
+
+# Run with both GPU and tmux
+./run.sh gpu tmux
 ```
 
-Start a tmux session (optional):
+- **Auto-Cleanup**: The `--rm` flag ensures the container is removed after it stops.
+- **Persistence**: Volumes (`logs/`, `checkpoints/`, `data/`) are automatically mounted.
+
+### Option 2: Manual Commands
+
 ```bash
-tmux new -s gpt2
+# Build
+docker build -t gpt2 .
+
+# Run with GPU and automatic removal
+docker run --rm -it --gpus all gpt2
 ```
 
-Run with GPU:
-```bash
-docker run --rm -it --gpus all gpt2-project
-```
 ## Quick Start (uv)
 
 ```bash
