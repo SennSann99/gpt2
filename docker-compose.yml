@@ -1,0 +1,10 @@
+services:
+  gpt2:
+    build: .
+    image: gpt2:latest
+    volumes:
+      - ./logs:/workspace/logs
+      - ./checkpoints:/workspace/checkpoints
+      - ./data:/workspace/data
+    environment:
+      - PYTHONUNBUFFERED=1
