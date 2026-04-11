@@ -9,6 +9,7 @@ logs/
 checkpoints/
 data/
 .DS_Store/
+*.ipynb
 
 # Virtual environments
 .venv
