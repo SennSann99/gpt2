@@ -10,6 +10,8 @@ checkpoints/
 data/
 .DS_Store/
 *.ipynb
+.env
+wandb/
 
 # Virtual environments
 .venv
