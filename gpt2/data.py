@@ -4,6 +4,7 @@ import lightning.pytorch as pl
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
+from datasets import load_dataset
 
 from gpt2.config import ModelConfig, TrainConfig
 
@@ -43,7 +44,8 @@ def build_dataloaders(
     model_cfg: ModelConfig,
     tokenizer,
 ) -> tuple[DataLoader, DataLoader]:
-    df = pd.read_csv(train_cfg.data_path)
+    df = load_dataset("arman-bd/guppylm-60k-generic")["train"]
+    # df = pd.read_csv(train_cfg.data_path)
     if train_cfg.text_column not in df.columns:
         available = ", ".join(df.columns)
         raise KeyError(f"Missing text column '{train_cfg.text_column}'. Columns: {available}")
