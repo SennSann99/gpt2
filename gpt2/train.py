@@ -17,7 +17,9 @@ from gpt2.model import GPTLightning
 
 
 def parse_args() -> tuple[ModelConfig, TrainConfig]:
-    parser = argparse.ArgumentParser(description="Train a compact GPT-2 model (Lightning)")
+    parser = argparse.ArgumentParser(
+        description="Train a compact GPT-2 model (Lightning)"
+    )
 
     parser.add_argument("--data-path", default="data/Papers.csv")
     parser.add_argument("--text-column", default="PaperText")
@@ -130,13 +132,13 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
 
         print(f"\n[INFO] 学習を中断して保存しています: {ckpt_path.name}")
         sys.stdout.flush()
-        
+
         try:
             trainer.save_checkpoint(str(ckpt_path))
             print(f"[INFO] 保存が完了しました: {ckpt_path.name}")
         except Exception as e:
             print(f"[ERROR] 保存失敗: {e}")
-        
+
         sys.stdout.flush()
         os._exit(0)
 
