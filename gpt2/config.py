@@ -13,6 +13,7 @@ Adding slots=True tells Python: "I am only going to use exactly these variables,
 * The Benefit: It prevents the creation of the underlying dictionary, saving memory and making accessing these variables slightly faster.
 """
 
+
 @dataclass(slots=True)
 class ModelConfig:
     vocab_size: int = 50257

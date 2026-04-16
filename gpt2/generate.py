@@ -1,15 +1,17 @@
 import argparse
 from pathlib import Path
 
-import torch
 import tiktoken
+import torch
 
 from gpt2.config import ModelConfig, TrainConfig
 from gpt2.model import GPTLightning
 
 
 def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
-    parser = argparse.ArgumentParser(description="Generate text from a trained GPT-2 model")
+    parser = argparse.ArgumentParser(
+        description="Generate text from a trained GPT-2 model"
+    )
     parser.add_argument("--checkpoint-path", default="checkpoints/last.ckpt")
     parser.add_argument("--block-size", type=int, default=256)
     parser.add_argument("--n-layer", type=int, default=12)
@@ -20,7 +22,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
     parser.add_argument("--prompt", default="One day, ")
     parser.add_argument("--max-new-tokens", type=int, default=128)
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     model_cfg = ModelConfig(
         block_size=args.block_size,
@@ -54,7 +56,9 @@ def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
 
 
 @torch.no_grad()
-def generate(model_cfg: ModelConfig, train_cfg: TrainConfig, prompt: str, max_new_tokens: int) -> str:
+def generate(
+    model_cfg: ModelConfig, train_cfg: TrainConfig, prompt: str, max_new_tokens: int
+) -> str:
     ckpt_path = Path(train_cfg.checkpoint_path)
     module = GPTLightning.load_from_checkpoint(
         str(ckpt_path),
