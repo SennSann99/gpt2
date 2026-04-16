@@ -16,6 +16,21 @@ from gpt2.data import GPTDataModule
 from gpt2.model import GPTLightning
 
 
+def get_next_version(root_dir: str, prefix: str = "version_") -> int:
+    root_path = Path(root_dir)
+    if not root_path.exists():
+        return 0
+    existing_versions = []
+    for d in root_path.iterdir():
+        if d.is_dir() and d.name.startswith(prefix):
+            try:
+                v = int(d.name[len(prefix) :])
+                existing_versions.append(v)
+            except ValueError:
+                continue
+    return max(existing_versions) + 1 if existing_versions else 0
+
+
 def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser = argparse.ArgumentParser(
         description="Train a compact GPT-2 model (Lightning)"
@@ -46,7 +61,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--no-amp", action="store_true")
-    parser.add_argument("--checkpoint-path", default="checkpoints/last.ckpt")
+    parser.add_argument("--checkpoint-path", default="checkpoints")
 
     args = parser.parse_args()
 
@@ -94,16 +109,20 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
     datamodule = GPTDataModule(train_cfg, model_cfg, tokenizer)
     module = GPTLightning(model_cfg, train_cfg)
 
-    ckpt_path = Path(train_cfg.checkpoint_path).resolve()
-    ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+    base_ckpt_path = Path(train_cfg.checkpoint_path).resolve()
+    version = get_next_version(str(base_ckpt_path))
+    version_dir = base_ckpt_path / f"version_{version}"
+    version_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint_cb = ModelCheckpoint(
-        dirpath=str(ckpt_path.parent),
-        filename=ckpt_path.stem,
+        dirpath=str(version_dir),
+        filename="best",
+        monitor="val_loss",
+        mode="min",
+        save_top_k=1,
         save_last=True,
-        every_n_train_steps=train_cfg.eval_interval,
     )
-    logger = CSVLogger(save_dir="logs", name="gpt2")
+    logger = CSVLogger(save_dir="logs", name="gpt2", version=version)
 
     use_amp = train_cfg.amp and torch.cuda.is_available()
     precision = "16-mixed" if use_amp else "32-true"
@@ -130,12 +149,13 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         if os.getpid() != main_pid:
             os._exit(0)
 
-        print(f"\n[INFO] 学習を中断して保存しています: {ckpt_path.name}")
+        interrupted_path = version_dir / "interrupted.ckpt"
+        print(f"\n[INFO] 学習を中断して保存しています: {interrupted_path.name}")
         sys.stdout.flush()
 
         try:
-            trainer.save_checkpoint(str(ckpt_path))
-            print(f"[INFO] 保存が完了しました: {ckpt_path.name}")
+            trainer.save_checkpoint(str(interrupted_path))
+            print(f"[INFO] 保存が完了しました: {interrupted_path.name}")
         except Exception as e:
             print(f"[ERROR] 保存失敗: {e}")
 
