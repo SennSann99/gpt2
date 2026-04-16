@@ -8,10 +8,12 @@ USE_GPU=false
 USE_TMUX=false
 
 # 引数の解析
+USE_WANDB=false
 for arg in "$@"; do
     case $arg in
-        gpu)  USE_GPU=true ;;
-        tmux) USE_TMUX=true ;;
+        gpu)   USE_GPU=true ;;
+        tmux)  USE_TMUX=true ;;
+        wandb) USE_WANDB=true ;;
     esac
 done
 
@@ -32,13 +34,33 @@ if [ "$USE_GPU" = true ]; then
     echo "💡 GPU support enabled."
 fi
 
+# WANDBオプションの構築
+WANDB_ENV=""
+WANDB_OPT=""
+if [ "$USE_WANDB" = true ]; then
+    if [ -f .env ]; then
+        # .env から WANDB_API_KEY を抽出して環境変数として渡す
+        WANDB_API_KEY=$(grep WANDB_API_KEY .env | cut -d '=' -f2 | xargs)
+        if [ -n "$WANDB_API_KEY" ]; then
+            WANDB_ENV="-e WANDB_API_KEY=$WANDB_API_KEY"
+            WANDB_OPT="--wandb"
+            echo "📊 WandB logging enabled."
+        else
+            echo "⚠️  Warning: WANDB_API_KEY not found in .env. Logging might fail."
+        fi
+    else
+        echo "⚠️  Warning: .env file not found. Logging might fail."
+    fi
+fi
+
 # 実行コマンドの構築
-RUN_CMD="docker run --rm -it $GPU_OPT \
+# CMDの末尾に引数を追加できるように $IMAGE_NAME の後に uv run main.py $WANDB_OPT を追加
+RUN_CMD="docker run --rm -it $GPU_OPT $WANDB_ENV \
     -v \"$PROJECT_ROOT/logs:/workspace/logs\" \
     -v \"$PROJECT_ROOT/checkpoints:/workspace/checkpoints\" \
     -v \"$PROJECT_ROOT/data:/workspace/data\" \
     -e PYTHONUNBUFFERED=1 \
-    $IMAGE_NAME"
+    $IMAGE_NAME uv run main.py $WANDB_OPT"
 
 if [ "$USE_TMUX" = true ]; then
     if ! command -v tmux > /dev/null; then
