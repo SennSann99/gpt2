@@ -20,7 +20,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
     parser.add_argument("--prompt", default="One day, ")
     parser.add_argument("--max-new-tokens", type=int, default=128)
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     model_cfg = ModelConfig(
         block_size=args.block_size,

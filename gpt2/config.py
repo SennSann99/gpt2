@@ -44,3 +44,4 @@ class TrainConfig:
     num_workers: int = 0
     amp: bool = True
     checkpoint_path: str = "checkpoints/last.ckpt"
+    wandb: bool = False
