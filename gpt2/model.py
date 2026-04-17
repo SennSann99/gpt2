@@ -253,16 +253,22 @@ class GPTLightning(pl.LightningModule):
 
     def training_step(self, batch, batch_idx: int) -> torch.Tensor:
         del batch_idx
-        x, y = batch
+        
+        # FIX: Extract from the dictionary just like in validation_step
+        x = batch["input_ids"]
+        y = batch["labels"]
+        
         _, loss = self.model(x, y)
         self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx: int) -> None:
         del batch_idx
-        x, y = batch
-        _, loss = self.model(x, y)
-        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        x = batch["input_ids"]
+        y = batch["labels"]
+        logits, loss = self(x, y)
+        self.log("val_loss", loss, prog_bar=True)
+        return loss
 
     def configure_optimizers(self):
         opt = build_optimizer(self.model, self.train_cfg)
