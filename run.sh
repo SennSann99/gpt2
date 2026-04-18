@@ -58,6 +58,13 @@ if [ "$USE_WANDB" = true ]; then
         else
             echo "Warning: WANDB_API_KEY not found in .env. Logging might fail."
         fi
+        WANDB_ENTITY=$(grep WANDB_ENTITY .env | cut -d '=' -f2 | xargs)
+        if [ -n "$WANDB_ENTITY" ]; then
+            DOCKER_CMD+=("-e" "WANDB_ENTITY=$WANDB_ENTITY")
+            echo "WandB entity is $WANDB_ENTITY"
+        else
+            echo "Warning: WANDB_ENTITY not found in .env. Logging might fail."
+        fi
     else
         echo "Warning: .env file not found. Logging might fail."
     fi
