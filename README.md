@@ -172,6 +172,7 @@ To enable web-based monitoring:
 2. Get your API Key from your settings.
 3. Create a `.env` file in the project root:
    ```env
+   WANDB_ENTITY=our_entity_here
    WANDB_API_KEY=your_api_key_here
    ```
 4. Run training with the `wandb` flag:

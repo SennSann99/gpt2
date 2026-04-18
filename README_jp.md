@@ -174,6 +174,7 @@ Webベースの監視を有効にする手順：
 2. 設定（Settings）から API Key を取得します．
 3. プロジェクトのルートに `.env` ファイルを作成します：
    ```env
+   WANDB_ENTITY=私たちのエンティティの名前
    WANDB_API_KEY=あなたのAPIキー
    ```
 4. `wandb` フラグを付けて実行します：
