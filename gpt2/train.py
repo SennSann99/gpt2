@@ -5,7 +5,7 @@ import lightning.pytorch as pl
 import tiktoken
 import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
-from lightning.pytorch.loggers import CSVLogger
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
 from gpt2.config import ModelConfig, TrainConfig
 from gpt2.data import GPTDataModule
@@ -13,7 +13,9 @@ from gpt2.model import GPTLightning
 
 
 def parse_args() -> tuple[ModelConfig, TrainConfig]:
-    parser = argparse.ArgumentParser(description="Train a compact GPT-2 model (Lightning)")
+    parser = argparse.ArgumentParser(
+        description="Train a compact GPT-2 model (Lightning)"
+    )
 
     parser.add_argument("--data-path", default="data/Papers.csv")
     parser.add_argument("--text-column", default="PaperText")
@@ -41,6 +43,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--checkpoint-path", default="checkpoints/last.ckpt")
+    parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
 
     args = parser.parse_args()
 
@@ -71,6 +74,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
         num_workers=args.num_workers,
         amp=not args.no_amp,
         checkpoint_path=args.checkpoint_path,
+        wandb=args.wandb,
     )
     return model_cfg, train_cfg
 
@@ -93,7 +97,10 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         save_top_k=0,
         save_last=True,
     )
-    logger = CSVLogger(save_dir="logs", name="gpt2")
+
+    loggers = [CSVLogger(save_dir="logs", name="gpt2")]
+    if train_cfg.wandb:
+        loggers.append(WandbLogger(project="gpt2-training", name="train_test"))
 
     use_amp = train_cfg.amp and torch.cuda.is_available()
     precision = "16-mixed" if use_amp else "32-true"
@@ -104,7 +111,7 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         max_steps=train_cfg.max_steps,
         val_check_interval=train_cfg.eval_interval,
         limit_val_batches=train_cfg.eval_batches,
-        logger=logger,
+        logger=loggers,
         callbacks=[checkpoint_cb, LearningRateMonitor(logging_interval="step")],
         gradient_clip_val=train_cfg.grad_clip,
         precision=precision,
