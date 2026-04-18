@@ -13,7 +13,9 @@ from gpt2.model import GPTLightning
 
 
 def parse_args() -> tuple[ModelConfig, TrainConfig]:
-    parser = argparse.ArgumentParser(description="Train a compact GPT-2 model (Lightning)")
+    parser = argparse.ArgumentParser(
+        description="Train a compact GPT-2 model (Lightning)"
+    )
 
     parser.add_argument("--data-path", default="data/Papers.csv")
     parser.add_argument("--text-column", default="PaperText")
@@ -95,10 +97,10 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         save_top_k=0,
         save_last=True,
     )
-    
+
     loggers = [CSVLogger(save_dir="logs", name="gpt2")]
     if train_cfg.wandb:
-        loggers.append(WandbLogger(project="gpt2-training"))
+        loggers.append(WandbLogger(project="gpt2-training", name="train_test"))
 
     use_amp = train_cfg.amp and torch.cuda.is_available()
     precision = "16-mixed" if use_amp else "32-true"
