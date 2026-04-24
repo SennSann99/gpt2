@@ -31,8 +31,6 @@ def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
         bias=args.bias,
     )
     train_cfg = TrainConfig(
-        data_path="",
-        text_column="",
         limit_rows=0,
         val_rows=0,
         batch_size=1,
