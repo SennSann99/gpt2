@@ -126,6 +126,20 @@ The .masked_fill() function looks at your raw att tensor and says:
 "Wherever the flipped mask is True (the future tokens), overwrite the existing score with negative infinity ($-\infty$)."
 """
 
+# add SwiGLU
+
+class SwiGLU(nn.Module):
+    def __init__(self, in_size):
+        super().__init__()
+        self.linear1 = nn.Linear(in_size, in_size)
+        self.linear2 = nn.Linear(in_size, in_size)
+    
+    
+    def forward(self, x):
+        return self.linear1(x) * F.SiLU(self.linear2(x))
+    
+
+
 class MLP(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -134,10 +148,12 @@ class MLP(nn.Module):
         self.proj = nn.Linear(hidden, cfg.n_embd, bias=cfg.bias)
         self.dropout = nn.Dropout(cfg.dropout)
 
+        self.swiglu = SwiGLU(hidden)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.fc(x)
-        x = F.gelu(x, approximate="tanh")
-        x = self.proj(x)
+        x = self.swiglu(x)
+        x = self.proj(x)        
         return self.dropout(x)
 
 
