@@ -1,9 +1,9 @@
 import os
 
 import lightning.pytorch as pl
-import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
+from datasets import load_dataset
 
 from gpt2.config import ModelConfig, TrainConfig
 
@@ -43,22 +43,22 @@ def build_dataloaders(
     model_cfg: ModelConfig,
     tokenizer,
 ) -> tuple[DataLoader, DataLoader]:
-    df = pd.read_csv(train_cfg.data_path)
-    if train_cfg.text_column not in df.columns:
-        available = ", ".join(df.columns)
+    ds = load_dataset("arman-bd/guppylm-60k-generic", split="train")
+    if train_cfg.text_column not in ds.column_names:
+        available = ", ".join(ds.column_names)
         raise KeyError(f"Missing text column '{train_cfg.text_column}'. Columns: {available}")
 
-    texts = df[train_cfg.text_column]
     if train_cfg.limit_rows > 0:
-        texts = texts.iloc[: train_cfg.limit_rows]
+        ds = ds.select(range(train_cfg.limit_rows))
 
-    if len(texts) <= train_cfg.val_rows:
+    n = len(ds)
+    if n <= train_cfg.val_rows:
         raise ValueError(
-            f"Need more than val_rows={train_cfg.val_rows} rows, got {len(texts)} rows."
+            f"Need more than val_rows={train_cfg.val_rows} rows, got {n} rows."
         )
 
-    train_texts = texts.iloc[:-train_cfg.val_rows]
-    val_texts = texts.iloc[-train_cfg.val_rows :]
+    train_texts = ds.select(range(n - train_cfg.val_rows))[train_cfg.text_column]
+    val_texts = ds.select(range(n - train_cfg.val_rows, n))[train_cfg.text_column]
 
     train_tokens = _flatten_texts_to_tokens(train_texts, tokenizer)
     val_tokens = _flatten_texts_to_tokens(val_texts, tokenizer)
