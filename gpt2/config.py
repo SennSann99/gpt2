@@ -26,8 +26,6 @@ class ModelConfig:
 
 @dataclass(slots=True)
 class TrainConfig:
-    data_path: str = "data/Papers.csv"
-    text_column: str = "PaperText"
     limit_rows: int = 0
     val_rows: int = 20
     batch_size: int = 2
@@ -44,3 +42,4 @@ class TrainConfig:
     num_workers: int = 0
     amp: bool = True
     checkpoint_path: str = "checkpoints/last.ckpt"
+    wandb: bool = False

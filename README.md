@@ -5,6 +5,7 @@
 | Date | Update |
 |---|---|
 | 2026-03-15 | Replaced positional encoding with Rotary Position Embedding (RoPE) |
+| 2026-04-16 | Integrated Weights & Biases (WandB) for web-based monitoring |
 
 
 
@@ -29,7 +30,7 @@ A minimal, research-oriented GPT-2 implementation designed for graduate-level AI
 | Training | PyTorch Lightning `Trainer` + `LightningModule` |
 | Optimizer | AdamW with parameter group weight decay + linear warmup |
 | Tokenization | `tiktoken` (GPT-2 encoding) |
-| Logging | CSV logger to `logs/`; TensorBoard-compatible |
+| Logging | CSV logger to `logs/` + **WandB (Weights & Biases)** |
 | Reproducibility | Deterministic seeding |
 
 ---
@@ -62,22 +63,64 @@ uv sync
 
 ---
 
-## Quick Start (docker)
+## Documentation
 
-Build:
+A local documentation server is provided to browse project details and research notes.
+
 ```bash
-docker build -t gpt2-project .
+./open_docs.sh
 ```
 
-Start a tmux session (optional):
+- **Port**: Default is 8080.
+- **Auto-open**: The script attempts to open your default browser automatically. If it doesn't open, manually access [http://localhost:8080](http://localhost:8080).
+- **No-cache**: The server is configured to prevent caching, ensuring you always see the latest content.
+
+---
+
+### Option 1: Using run.sh (Recommended)
+
+The `run.sh` script automates image building and container execution. It supports multiple options that can be combined in any order.
+
+### Available Options
+
+| Option | Description |
+|---|---|
+| `gpu` | Enable NVIDIA GPU support (requires NVIDIA Container Toolkit) |
+| `tmux` | Start a new background `tmux` session named `gpt2` |
+| `wandb` | Enable Web monitoring via **Weights & Biases** (requires `.env` file) |
+
+### Usage Examples
+
 ```bash
-tmux new -s gpt2
+# Basic run (CPU)
+./run.sh
+
+# Enable specific features
+./run.sh gpu
+./run.sh wandb
+./run.sh tmux
+
+# Combine options (any order)
+./run.sh gpu wandb
+./run.sh gpu tmux wandb
 ```
 
-Run with GPU:
+- **Combining Options**: You can pass any combination of these keywords. For example, `./run.sh wandb gpu` is the same as `./run.sh gpu wandb`.
+- **Auto-Cleanup**: The `--rm` flag ensures the container is removed after it stops.
+- **Persistence**: Volumes (`logs/`, `checkpoints/`, `data/`) are automatically mounted.
+
+### Option 2: Manual Commands
+
 ```bash
-docker run --rm -it --gpus all gpt2-project
+# Build
+docker build -t gpt2 .
+
+# Run with GPU and automatic removal
+docker run --rm -it --gpus all gpt2
 ```
+
+---
+
 ## Quick Start (uv)
 
 ```bash
@@ -117,6 +160,25 @@ uv run python -m gpt2.train \
 |---|---|
 | Latest checkpoint | `checkpoints/last.ckpt` |
 | Training logs | `logs/` |
+| Web Monitoring | [Weights & Biases](https://wandb.ai/) |
+
+---
+
+## WandB Setup
+
+To enable web-based monitoring:
+
+1. Create a free account at [wandb.ai](https://wandb.ai/).
+2. Get your API Key from your settings.
+3. Create a `.env` file in the project root:
+   ```env
+   WANDB_ENTITY=our_entity_here
+   WANDB_API_KEY=your_api_key_here
+   ```
+4. Run training with the `wandb` flag:
+   ```bash
+   ./run.sh gpu wandb
+   ```
 
 ---
 

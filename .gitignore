@@ -6,9 +6,12 @@ dist/
 wheels/
 *.egg-info
 logs/
-checkpoint/
+checkpoints/
 data/
 .DS_Store/
+*.ipynb
+*.env
+wandb/
 
 # Virtual environments
 .venv

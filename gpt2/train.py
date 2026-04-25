@@ -2,18 +2,44 @@ import argparse
 from pathlib import Path
 
 import lightning.pytorch as pl
-import tiktoken
 import torch
+from torch.utils.data import DataLoader
+from transformers import AutoTokenizer
+from datasets import load_dataset
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
-from lightning.pytorch.loggers import CSVLogger
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
 from gpt2.config import ModelConfig, TrainConfig
-from gpt2.data import GPTDataModule
 from gpt2.model import GPTLightning
 
+# 1. Initialize the tokenizer globally so the tokenize_function can use it
+tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
+tokenizer.pad_token = tokenizer.eos_token
+
+def tokenize_function(examples):
+    # Combine the input and output into a single conversational string
+    texts = [
+        f"User: {inp}\nModel: {out}{tokenizer.eos_token}" 
+        for inp, out in zip(examples['input'], examples['output'])
+    ]
+    
+    # Tokenize the combined texts
+    tokenized = tokenizer(
+        texts,
+        truncation=True,
+        max_length=128,       
+        padding="max_length"  
+    )
+    
+    # Create the labels for GPT-2 causal language modeling
+    tokenized["labels"] = tokenized["input_ids"].copy()
+    
+    return tokenized
 
 def parse_args() -> tuple[ModelConfig, TrainConfig]:
-    parser = argparse.ArgumentParser(description="Train a compact GPT-2 model (Lightning)")
+    parser = argparse.ArgumentParser(
+        description="Train a compact GPT-2 model (Lightning)"
+    )
 
     parser.add_argument("--data-path", default="data/Papers.csv")
     parser.add_argument("--text-column", default="PaperText")
@@ -27,7 +53,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--bias", action="store_true")
 
-    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--batch-size", type=int, default=8) # Updated default to 8 based on previous steps
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-batches", type=int, default=10)
@@ -41,6 +67,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--checkpoint-path", default="checkpoints/last.ckpt")
+    parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
 
     args = parser.parse_args()
 
@@ -53,8 +80,6 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
         bias=args.bias,
     )
     train_cfg = TrainConfig(
-        data_path=args.data_path,
-        text_column=args.text_column,
         limit_rows=args.limit_rows,
         val_rows=args.val_rows,
         batch_size=args.batch_size,
@@ -71,15 +96,15 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
         num_workers=args.num_workers,
         amp=not args.no_amp,
         checkpoint_path=args.checkpoint_path,
+        wandb=args.wandb,
     )
     return model_cfg, train_cfg
 
 
-def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
+# Updated train function to accept the DataLoaders
+def train(model_cfg: ModelConfig, train_cfg: TrainConfig, train_loader: DataLoader, val_loader: DataLoader) -> None:
     pl.seed_everything(train_cfg.seed, workers=True)
 
-    tokenizer = tiktoken.get_encoding("gpt2")
-    datamodule = GPTDataModule(train_cfg, model_cfg, tokenizer)
     module = GPTLightning(model_cfg, train_cfg)
 
     ckpt_path = Path(train_cfg.checkpoint_path)
@@ -93,7 +118,10 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         save_top_k=0,
         save_last=True,
     )
-    logger = CSVLogger(save_dir="logs", name="gpt2")
+
+    loggers = [CSVLogger(save_dir="logs", name="gpt2")]
+    if train_cfg.wandb:
+        loggers.append(WandbLogger(project="gpt2-training", name="train_test"))
 
     use_amp = train_cfg.amp and torch.cuda.is_available()
     precision = "16-mixed" if use_amp else "32-true"
@@ -104,20 +132,56 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig) -> None:
         max_steps=train_cfg.max_steps,
         val_check_interval=train_cfg.eval_interval,
         limit_val_batches=train_cfg.eval_batches,
-        logger=logger,
+        logger=loggers,
         callbacks=[checkpoint_cb, LearningRateMonitor(logging_interval="step")],
         gradient_clip_val=train_cfg.grad_clip,
         precision=precision,
         log_every_n_steps=1,
     )
 
-    trainer.fit(module, datamodule=datamodule)
+    # Pass the DataLoaders directly into the fit method
+    trainer.fit(
+        module, 
+        train_dataloaders=train_loader, 
+        val_dataloaders=val_loader
+    )
 
 
 def main() -> None:
+    # 1. Parse arguments
     model_cfg, train_cfg = parse_args()
-    train(model_cfg, train_cfg)
 
+    # 2. Load the dataset
+    print("Loading dataset...")
+    dataset = load_dataset("arman-bd/guppylm-60k-generic")
+    train_dataset = dataset["train"]
+    val_dataset = dataset["test"]
+
+    # 3. Tokenize the datasets
+    print("Tokenizing data...")
+    tokenized_train = train_dataset.map(
+        tokenize_function, 
+        batched=True, 
+        remove_columns=train_dataset.column_names
+    )
+    tokenized_val = val_dataset.map(
+        tokenize_function, 
+        batched=True, 
+        remove_columns=val_dataset.column_names
+    )
+
+    # 4. Convert to PyTorch tensors
+    tokenized_train.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+    tokenized_val.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+
+    # 5. Create DataLoaders
+    print("Creating DataLoaders...")
+    train_loader = DataLoader(tokenized_train, shuffle=True, batch_size=train_cfg.batch_size)
+    val_loader = DataLoader(tokenized_val, batch_size=train_cfg.batch_size)
+
+    # 6. Start training!
+    print("Starting training pipeline...")
+    train(model_cfg, train_cfg, train_loader, val_loader)
 
 if __name__ == "__main__":
     main()
