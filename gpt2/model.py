@@ -1,16 +1,19 @@
+from dataclasses import asdict
+
+import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import lightning.pytorch as pl
-from dataclasses import asdict
 
 from gpt2.config import ModelConfig
+
 
 class RotaryPositionalEmbedding(nn.Module):
     """
     Rotary Position Embedding (RoPE) — Su et al., 2021.
     Precomputes cos/sin tables; applied to Q and K inside attention (not token embeddings).
     """
+
     def __init__(self, head_dim: int, max_seq_len: int):
         super().__init__()
         # θ_i = 1 / 10000^(2i / head_dim), shape: (head_dim // 2,)
@@ -66,8 +69,11 @@ def apply_rotary_emb(
         result[4] = x4 * cos(mθ₀) + x0 * sin(mθ₀)
           = x4·cos + x0·sin    ✓ the other half of the rotation!
     """
-    return x * cos + _rotate_half(x) * sin  # x*cos produces [x1·cos, x2·cos], _rotate_half(x)*sin produces [-x2·sin, x1·sin]
-    
+    return (
+        x * cos + _rotate_half(x) * sin
+    )  # x*cos produces [x1·cos, x2·cos], _rotate_half(x)*sin produces [-x2·sin, x1·sin]
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -81,12 +87,18 @@ class CausalSelfAttention(nn.Module):
         self.resid_dropout = nn.Dropout(cfg.dropout)
         self.rope = RotaryPositionalEmbedding(self.head_dim, cfg.block_size)
         mask = torch.tril(torch.ones(cfg.block_size, cfg.block_size, dtype=torch.bool))
-        self.register_buffer("causal_mask", mask.view(1, 1, cfg.block_size, cfg.block_size))
+        self.register_buffer(
+            "causal_mask", mask.view(1, 1, cfg.block_size, cfg.block_size)
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         bsz, seqlen, channels = x.shape
-        qkv = self.qkv(x) # So, the shape of the qkv tensor becomes (bsz, seqlen, 3 * channels)
-        q, k, v = qkv.split(channels, dim=-1) # The .split(channels, dim=-1) function tells PyTorch to take that last dimension (which is currently 3 * channels wide) and chop it into equal chunks of size channels.
+        qkv = self.qkv(
+            x
+        )  # So, the shape of the qkv tensor becomes (bsz, seqlen, 3 * channels)
+        q, k, v = qkv.split(
+            channels, dim=-1
+        )  # The .split(channels, dim=-1) function tells PyTorch to take that last dimension (which is currently 3 * channels wide) and chop it into equal chunks of size channels.
 
         q = q.view(bsz, seqlen, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(bsz, seqlen, self.n_head, self.head_dim).transpose(1, 2)
@@ -94,8 +106,8 @@ class CausalSelfAttention(nn.Module):
 
         # Apply RoPE to Q and K (not V)
         cos, sin = self.rope(seqlen)
-        q = apply_rotary_emb(q, cos, sin) 
-        k = apply_rotary_emb(k, cos, sin) 
+        q = apply_rotary_emb(q, cos, sin)
+        k = apply_rotary_emb(k, cos, sin)
 
         att = torch.einsum("bhid,bhjd->bhij", q, k)
         att = att * (self.head_dim**-0.5)
@@ -106,6 +118,7 @@ class CausalSelfAttention(nn.Module):
         y = torch.einsum("bhij,bhjd->bhid", att, v)
         y = y.transpose(1, 2).contiguous().view(bsz, seqlen, channels)
         return self.resid_dropout(self.proj(y))
+
 
 """
 1. The Raw Attention Scores (att)
@@ -128,16 +141,15 @@ The .masked_fill() function looks at your raw att tensor and says:
 
 # add SwiGLU
 
+
 class SwiGLU(nn.Module):
     def __init__(self, in_size):
         super().__init__()
         self.linear1 = nn.Linear(in_size, in_size)
         self.linear2 = nn.Linear(in_size, in_size)
-    
-    
+
     def forward(self, x):
-        return self.linear1(x) * F.SiLU(self.linear2(x))
-    
+        return self.linear1(x) * F.silu(self.linear2(x))
 
 
 class MLP(nn.Module):
@@ -153,7 +165,7 @@ class MLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.fc(x)
         x = self.swiglu(x)
-        x = self.proj(x)        
+        x = self.proj(x)
         return self.dropout(x)
 
 
@@ -197,7 +209,9 @@ class GPTModel(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         bsz, seqlen = idx.shape
         if seqlen > self.cfg.block_size:
-            raise ValueError(f"Sequence length {seqlen} > block_size {self.cfg.block_size}")
+            raise ValueError(
+                f"Sequence length {seqlen} > block_size {self.cfg.block_size}"
+            )
 
         x = self.token_embedding(idx)
         x = self.dropout(x)
@@ -269,11 +283,11 @@ class GPTLightning(pl.LightningModule):
 
     def training_step(self, batch, batch_idx: int) -> torch.Tensor:
         del batch_idx
-        
+
         # FIX: Extract from the dictionary just like in validation_step
         x = batch["input_ids"]
         y = batch["labels"]
-        
+
         _, loss = self.model(x, y)
         self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
