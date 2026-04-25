@@ -224,6 +224,7 @@ def build_optimizer(model: nn.Module, cfg) -> torch.optim.Optimizer:
         ],
         lr=cfg.learning_rate,
         betas=(cfg.beta1, cfg.beta2),
+        fused=True,
     )
 
 
