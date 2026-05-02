@@ -134,7 +134,8 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, train_loader: DataLoad
         limit_val_batches=train_cfg.eval_batches,
         logger=loggers,
         callbacks=[checkpoint_cb, LearningRateMonitor(logging_interval="step")],
-        gradient_clip_val=train_cfg.grad_clip,
+        #gradient_clip_val=train_cfg.grad_clip,
+        gradient_clip_val=0.0, # Fused=Trueの場合、勾配クリッピングを無効化
         precision=precision,
         log_every_n_steps=1,
     )
