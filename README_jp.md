@@ -5,6 +5,7 @@
 | 日付 | 更新内容 |
 |---|---|
 | 2026-03-15 | 位置エンコーディングを Rotary Position Embedding (RoPE) に置き換えました． |
+| 2026-04-16 | Weights & Biases (WandB) によるWeb監視機能を統合しました． |
 
 大学院生レベルのAI研究向けに設計された，最小限かつ研究志向のGPT-2実装です．内部構造が明確で，再現性のある実験が可能であり，PyTorch Lightningを利用したクリーンなスケーリングパスを備えています．
 
@@ -27,7 +28,7 @@
 | 学習 | PyTorch Lightningの `Trainer` + `LightningModule` |
 | 最適化 | パラメータグループごとのWeight Decayと線形ウォームアップを備えたAdamW |
 | トークン化 | `tiktoken` (GPT-2 エンコーディング) |
-| ロギング | `logs/` へのCSVロガー出力．TensorBoard互換 |
+| ロギング | `logs/` へのCSVロガー出力 + **WandB (Weights & Biases)** |
 | 再現性 | 決定論的なシード設定 |
 
 ---
@@ -111,29 +112,39 @@ uv run python -m gpt2.train \
 | `interrupted.ckpt` | Ctrl+C等で学習を中断した際の状態 |
 
 ※ テキスト生成時（`generate.py`）は、パスを指定しない場合、自動的に最新フォルダの `best.ckpt` を検索して読み込みます。
+| 最新のチェックポイント | `checkpoints/last.ckpt` |
+| 学習ログ | `logs/` |
+| Web監視 | [Weights & Biases](https://wandb.ai/) |
 
 ---
 
-## Dockerでの実行 (run.sh)
+## Dockerを利用して、ビルドから実行までを自動化するスクリプトを用意しています。各オプションは自由に組み合わせて使用可能です。
 
-### 方法1: run.sh を使用する (推奨)
+### 利用可能なオプション
 
-Dockerを利用して、ビルドから実行（GPU・tmux対応）までを自動化するスクリプトを用意しています。
+| オプション | 内容 |
+|---|---|
+| `gpu` | NVIDIA GPUサポートを有効化（NVIDIA Container Toolkitが必要） |
+| `tmux` | `gpt2` という名前のバックグラウンド `tmux` セッションで実行 |
+| `wandb` | **Weights & Biases** によるWeb監視を有効化（`.env`ファイルが必要） |
+
+### 実行例
 
 ```bash
 # 基本的な実行 (CPU)
 ./run.sh
 
-# GPUを使用して実行
+# 各機能を単体で有効化
 ./run.sh gpu
-
-# tmuxセッション内で実行
+./run.sh wandb
 ./run.sh tmux
 
-# GPUを使用し、かつtmuxセッション内で実行
-./run.sh gpu tmux
+# 自由に組み合わせて実行（順序不問）
+./run.sh gpu wandb
+./run.sh gpu tmux wandb
 ```
 
+- **オプションの組み合わせ**: 必要なキーワードをスペース区切りで並べるだけです。例えば `./run.sh wandb gpu` としても正しく動作します。
 - **自動削除**: コンテナ終了時に `--rm` オプションによりコンテナは自動的に削除されます。
 - **永続化**: `logs/`, `checkpoints/`, `data/` ディレクトリはホスト側にマウントされ、データが保持されます。
 
@@ -166,3 +177,21 @@ docker run --rm -it --gpus all gpt2
 ## 並列処理
 
 学習はPyTorch Lightning上に構築されているため，単一のCPU/GPUからマルチGPUのDDP（Distributed Data Parallel）へのスケーリングにおいて，学習ループを変更する必要はありません．Lightningがデバイスの配置，DDPのセットアップ，および自動混合精度（Mixed Precision）を自動的に処理します．
+
+---
+
+## WandBのセットアップ
+
+Webベースの監視を有効にする手順：
+
+1. [wandb.ai](https://wandb.ai/) で無料アカウントを作成します．
+2. 設定（Settings）から API Key を取得します．
+3. プロジェクトのルートに `.env` ファイルを作成します：
+   ```env
+   WANDB_ENTITY=私たちのエンティティの名前
+   WANDB_API_KEY=あなたのAPIキー
+   ```
+4. `wandb` フラグを付けて実行します：
+   ```bash
+   ./run.sh gpu wandb
+   ```

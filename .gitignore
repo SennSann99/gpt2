@@ -10,7 +10,7 @@ checkpoints/
 data/
 .DS_Store/
 *.ipynb
-.env
+*.env
 wandb/
 
 # Virtual environments
