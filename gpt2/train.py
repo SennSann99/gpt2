@@ -1,13 +1,17 @@
 import argparse
+import os
+import signal
+import sys
+import warnings
 from pathlib import Path
 
 import lightning.pytorch as pl
 import torch
-from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
 from datasets import load_dataset
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
+from torch.utils.data import DataLoader
+from transformers import AutoTokenizer
 
 from gpt2.config import ModelConfig, TrainConfig
 from gpt2.model import GPTLightning
@@ -16,25 +20,37 @@ from gpt2.model import GPTLightning
 tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
 tokenizer.pad_token = tokenizer.eos_token
 
+
 def tokenize_function(examples):
     # Combine the input and output into a single conversational string
     texts = [
-        f"User: {inp}\nModel: {out}{tokenizer.eos_token}" 
-        for inp, out in zip(examples['input'], examples['output'])
+        f"User: {inp}\nModel: {out}{tokenizer.eos_token}"
+        for inp, out in zip(examples["input"], examples["output"])
     ]
-    
+
     # Tokenize the combined texts
-    tokenized = tokenizer(
-        texts,
-        truncation=True,
-        max_length=128,       
-        padding="max_length"  
-    )
-    
+    tokenized = tokenizer(texts, truncation=True, max_length=128, padding="max_length")
+
     # Create the labels for GPT-2 causal language modeling
     tokenized["labels"] = tokenized["input_ids"].copy()
-    
+
     return tokenized
+
+
+def get_next_version(root_dir: str, prefix: str = "version_") -> int:
+    root_path = Path(root_dir)
+    if not root_path.exists():
+        return 0
+    existing_versions = []
+    for d in root_path.iterdir():
+        if d.is_dir() and d.name.startswith(prefix):
+            try:
+                v = int(d.name[len(prefix) :])
+                existing_versions.append(v)
+            except ValueError:
+                continue
+    return max(existing_versions) + 1 if existing_versions else 0
+
 
 def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser = argparse.ArgumentParser(
@@ -53,7 +69,9 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--bias", action="store_true")
 
-    parser.add_argument("--batch-size", type=int, default=8) # Updated default to 8 based on previous steps
+    parser.add_argument(
+        "--batch-size", type=int, default=8
+    )  # Updated default to 8 based on previous steps
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-batches", type=int, default=10)
@@ -66,7 +84,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--no-amp", action="store_true")
-    parser.add_argument("--checkpoint-path", default="checkpoints/last.ckpt")
+    parser.add_argument("--checkpoint-path", default="checkpoints")
     parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
 
     args = parser.parse_args()
@@ -101,25 +119,38 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     return model_cfg, train_cfg
 
 
+# グローバルで保存フラグを管理（重複阻止）
+_SAVING_FINAL = False
+warnings.filterwarnings("ignore", message=".*weights_only.*")
+
+
 # Updated train function to accept the DataLoaders
-def train(model_cfg: ModelConfig, train_cfg: TrainConfig, train_loader: DataLoader, val_loader: DataLoader) -> None:
+def train(
+    model_cfg: ModelConfig,
+    train_cfg: TrainConfig,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+) -> None:
+    main_pid = os.getpid()
     pl.seed_everything(train_cfg.seed, workers=True)
 
     module = GPTLightning(model_cfg, train_cfg)
 
-    ckpt_path = Path(train_cfg.checkpoint_path)
-    ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+    base_ckpt_path = Path(train_cfg.checkpoint_path).resolve()
+    version = get_next_version(str(base_ckpt_path))
+    version_dir = base_ckpt_path / f"version_{version}"
+    version_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint_cb = ModelCheckpoint(
-        dirpath=str(ckpt_path.parent),
-        filename=ckpt_path.stem,
+        dirpath=str(version_dir),
+        filename="best",
         monitor="val_loss",
         mode="min",
-        save_top_k=0,
+        save_top_k=1,
         save_last=True,
     )
 
-    loggers = [CSVLogger(save_dir="logs", name="gpt2")]
+    loggers = [CSVLogger(save_dir="logs", name="gpt2", version=version)]
     if train_cfg.wandb:
         loggers.append(WandbLogger(project="gpt2-training", name="train_test"))
 
@@ -139,12 +170,37 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, train_loader: DataLoad
         log_every_n_steps=1,
     )
 
+    def handle_signal(sig, frame):
+        global _SAVING_FINAL
+        if _SAVING_FINAL:
+            return
+        _SAVING_FINAL = True
+
+        if os.getpid() != main_pid:
+            os._exit(0)
+
+        interrupted_path = version_dir / "interrupted.ckpt"
+        print(f"\n[INFO] 学習を中断して保存しています: {interrupted_path.name}")
+        sys.stdout.flush()
+
+        try:
+            trainer.save_checkpoint(str(interrupted_path))
+            print(f"[INFO] 保存が完了しました: {interrupted_path.name}")
+        except Exception as e:
+            print(f"[ERROR] 保存失敗: {e}")
+
+        sys.stdout.flush()
+        os._exit(0)
+
+    signal.signal(signal.SIGINT, handle_signal)
+
+    try:
+        trainer.fit(module, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+    except KeyboardInterrupt:
+        if not _SAVING_FINAL:
+            handle_signal(None, None)
     # Pass the DataLoaders directly into the fit method
-    trainer.fit(
-        module, 
-        train_dataloaders=train_loader, 
-        val_dataloaders=val_loader
-    )
 
 
 def main() -> None:
@@ -160,28 +216,31 @@ def main() -> None:
     # 3. Tokenize the datasets
     print("Tokenizing data...")
     tokenized_train = train_dataset.map(
-        tokenize_function, 
-        batched=True, 
-        remove_columns=train_dataset.column_names
+        tokenize_function, batched=True, remove_columns=train_dataset.column_names
     )
     tokenized_val = val_dataset.map(
-        tokenize_function, 
-        batched=True, 
-        remove_columns=val_dataset.column_names
+        tokenize_function, batched=True, remove_columns=val_dataset.column_names
     )
 
     # 4. Convert to PyTorch tensors
-    tokenized_train.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
-    tokenized_val.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+    tokenized_train.set_format(
+        type="torch", columns=["input_ids", "attention_mask", "labels"]
+    )
+    tokenized_val.set_format(
+        type="torch", columns=["input_ids", "attention_mask", "labels"]
+    )
 
     # 5. Create DataLoaders
     print("Creating DataLoaders...")
-    train_loader = DataLoader(tokenized_train, shuffle=True, batch_size=train_cfg.batch_size)
+    train_loader = DataLoader(
+        tokenized_train, shuffle=True, batch_size=train_cfg.batch_size
+    )
     val_loader = DataLoader(tokenized_val, batch_size=train_cfg.batch_size)
 
     # 6. Start training!
     print("Starting training pipeline...")
     train(model_cfg, train_cfg, train_loader, val_loader)
+
 
 if __name__ == "__main__":
     main()

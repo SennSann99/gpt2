@@ -158,8 +158,20 @@ uv run python -m gpt2.train \
 
 | Artifact | Path |
 |---|---|
-| Latest checkpoint | `checkpoints/last.ckpt` |
-| Training logs | `logs/` |
+| Checkpoints | `checkpoints/version_{n}/` |
+| Training logs | `logs/version_{n}/` |
+
+### Checkpoint Rules
+
+Checkpoints are organized into `version_{n}` directories for each run.
+
+| Filename | Condition |
+|---|---|
+| `best.ckpt` | Model state with the minimum `val_loss` |
+| `last.ckpt` | Always the most recent model state |
+| `interrupted.ckpt` | Model state when training is interrupted (e.g., Ctrl+C) |
+
+※ When running `generate.py`, it will automatically look for and load `best.ckpt` from the latest version directory if no explicit path is given.
 | Web Monitoring | [Weights & Biases](https://wandb.ai/) |
 
 ---

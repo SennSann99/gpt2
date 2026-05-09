@@ -98,6 +98,20 @@ uv run python -m gpt2.train \
 
 | 生成物 | パス |
 |---|---|
+| チェックポイント | `checkpoints/version_{n}/` |
+| 学習ログ | `logs/version_{n}/` |
+
+### チェックポイント保存ルール
+
+チェックポイントは実行ごとに `version_{n}` ディレクトリに分かれて保存されます。
+
+| ファイル名 | 保存条件 |
+|---|---|
+| `best.ckpt` | `val_loss` が最小を更新した際の状態 |
+| `last.ckpt` | 常に最新の状態 |
+| `interrupted.ckpt` | Ctrl+C等で学習を中断した際の状態 |
+
+※ テキスト生成時（`generate.py`）は、パスを指定しない場合、自動的に最新フォルダの `best.ckpt` を検索して読み込みます。
 | 最新のチェックポイント | `checkpoints/last.ckpt` |
 | 学習ログ | `logs/` |
 | Web監視 | [Weights & Biases](https://wandb.ai/) |
