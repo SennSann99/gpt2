@@ -1,5 +1,6 @@
 """GPT-2 Streamlit チャットフロントエンド."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -98,9 +99,11 @@ def main() -> None:
             "Max New Tokens", min_value=16, max_value=512, value=128, step=16
         )
 
+
     # --- モデルのロード ---
     model_cfg = ModelConfig()
-    train_cfg = TrainConfig(checkpoint_path="checkpoints")
+    checkpoint_path = os.environ.get("CHECKPOINT_PATH", "checkpoints")
+    train_cfg = TrainConfig(checkpoint_path=checkpoint_path)
 
     try:
         module, device = load_model(model_cfg, train_cfg)
