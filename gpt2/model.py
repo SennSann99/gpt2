@@ -129,29 +129,18 @@ The .masked_fill() function looks at your raw att tensor and says:
 # add SwiGLU
 
 
-class SwiGLU(nn.Module):
-    def __init__(self, in_size):
-        super().__init__()
-        self.linear1 = nn.Linear(in_size, in_size)
-        self.linear2 = nn.Linear(in_size, in_size)
-
-    def forward(self, x):
-        return self.linear1(x) * F.silu(self.linear2(x))
-
 class MLP(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         hidden = 4 * cfg.n_embd
-        self.fc = nn.Linear(cfg.n_embd, hidden, bias=cfg.bias)
-        self.proj = nn.Linear(hidden, cfg.n_embd, bias=cfg.bias)
+        self.gate_proj = nn.Linear(cfg.n_embd, hidden, bias=cfg.bias)
+        self.up_proj = nn.Linear(cfg.n_embd, hidden, bias=cfg.bias)
+        self.down_proj = nn.Linear(hidden, cfg.n_embd, bias=cfg.bias)
         self.dropout = nn.Dropout(cfg.dropout)
-        
-        self.swiglu = SwiGLU(hidden)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.fc(x)
-        x = self.swiglu(x)
-        x = self.proj(x)
+        x = F.silu(self.gate_proj(x)) * self.up_proj(x)
+        x = self.down_proj(x)
         return self.dropout(x)
 
 

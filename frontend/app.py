@@ -16,9 +16,9 @@ from gpt2.config import ModelConfig, TrainConfig  # noqa: E402
 from gpt2.model import GPTLightning  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 # モデルのロード（キャッシュ付き）
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 @st.cache_resource
 def load_model(
     model_cfg: ModelConfig,
@@ -64,9 +64,9 @@ def load_model(
     return module, device
 
 
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 # テキスト生成
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 @torch.no_grad()
 def generate_text(
     module: GPTLightning,
@@ -79,12 +79,14 @@ def generate_text(
     encoded = tokenizer.encode(prompt)
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
-    return tokenizer.decode(out[0].tolist())
+    # プロンプト部分を除外し、生成部分のみ返す
+    generated_tokens = out[0][len(encoded):].tolist()
+    return tokenizer.decode(generated_tokens)
 
 
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 # Streamlit UI
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title="GPT-2 Chat", page_icon="🤖", layout="centered")
     st.title("GPT-2 Chat")
