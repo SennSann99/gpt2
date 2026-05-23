@@ -126,9 +126,6 @@ The .masked_fill() function looks at your raw att tensor and says:
 "Wherever the flipped mask is True (the future tokens), overwrite the existing score with negative infinity ($-\infty$)."
 """
 
-# add SwiGLU
-
-
 class MLP(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -139,18 +136,37 @@ class MLP(nn.Module):
         self.dropout = nn.Dropout(cfg.dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.silu(self.gate_proj(x)) * self.up_proj(x)
+        x = F.silu(self.gate_proj(x)) * self.up_proj(x) # add SwiGLU
         x = self.down_proj(x)
         return self.dropout(x)
 
+# add MoE
+class Router(nn.Module):
+
+
+class MLPExperts(nn.Module):
+
+
+class MOELayer(nn.Module):
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.router = Router(cfg)
+        self.experts = MLPExperts(cfg)
+    
+    def forward(self, x: torch.Tensor):
+        x = torch.bmm(x, self.c)
+
 
 class Block(nn.Module):
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, use_moe=False):
         super().__init__()
         self.ln_1 = nn.LayerNorm(cfg.n_embd)
         self.attn = CausalSelfAttention(cfg)
         self.ln_2 = nn.LayerNorm(cfg.n_embd)
-        self.mlp = MLP(cfg)
+        if use_moe:
+            self.mlp = MOELayer(cfg)
+        else:
+            self.mlp = MLP(cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.ln_1(x))
@@ -164,7 +180,7 @@ class GPTModel(nn.Module):
         self.cfg = cfg
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.n_embd)
         self.dropout = nn.Dropout(cfg.dropout)
-        self.blocks = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layer)])
+        self.blocks = nn.ModuleList([Block(cfg, use_moe=True) for _ in range(cfg.n_layer)])
         self.ln_f = nn.LayerNorm(cfg.n_embd)
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
 
