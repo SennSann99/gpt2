@@ -24,7 +24,7 @@ docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile" "$PROJECT_ROOT"
 # コンテナの起動
 echo "Checkpoint: $CHECKPOINT_PATH"
 echo "Starting Streamlit app on http://localhost:$PORT ..."
-exec docker run --rm -it \
+exec docker run --rm -it --gpus all\
     -p "$PORT:8501" \
     -v "$PROJECT_ROOT/checkpoints:/workspace/checkpoints" \
     -e "CHECKPOINT_PATH=$CHECKPOINT_PATH" \
