@@ -123,7 +123,7 @@ These True values spatially correspond to the "future" tokens in the sequence.
 
 3. Masking with Negative Infinity (float("-inf"))
 The .masked_fill() function looks at your raw att tensor and says: 
-"Wherever the flipped mask is True (the future tokens), overwrite the existing score with negative infinity ($-\infty$)."
+"Wherever the flipped mask is True (the future tokens), overwrite the existing score with negative infinity ($-\\infty$)."
 """
 
 # add SwiGLU
