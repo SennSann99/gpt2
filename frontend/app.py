@@ -88,7 +88,56 @@ def generate_text(
     return tokenizer.decode(generated_tokens)
 
 
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
+# オープンソースモデルのロードとテキスト生成
+#---------------------------------------------------------------------------
+@st.cache_resource
+def load_hf_model(model_name: str) -> tuple[transformers.PreTrainedModel, transformers.PreTrainedTokenizer, torch.device]:
+    """Hugging Faceからモデルをロードし、キャッシュする."""
+    device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16 if device.type != "cpu" else torch.float32,
+    )
+    model.to(device)
+    model.eval()
+    return model, tokenizer, device
+
+@torch.no_grad()
+def generate_text_hf(
+    model: transformers.PreTrainedModel,
+    tokenizer: transformers.PreTrainedTokenizer,
+    device: torch.device,
+    prompt: str,
+    max_new_tokens: int,
+) -> str:
+    """HFモデルを用いてテキストを生成する."""
+    # Instructモデル用にチャットテンプレートを適用（可能であれば）
+    if hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template is not None:
+        messages = [{"role": "user", "content": prompt}]
+        prompt_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    else:
+        prompt_text = prompt
+
+    inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
+    
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=max_new_tokens,
+        do_sample=True,
+        temperature=0.7,
+        top_p=0.9,
+        pad_token_id=tokenizer.eos_token_id,
+    )
+    
+    # プロンプト部分を除外し、生成部分のみ返す
+    input_length = inputs.input_ids.shape[1]
+    generated_tokens = outputs[0][input_length:]
+    return tokenizer.decode(generated_tokens, skip_special_tokens=True)
+
+
+#---------------------------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------------------------
 def main() -> None:
@@ -98,20 +147,34 @@ def main() -> None:
     # --- サイドバー ---
     with st.sidebar:
         st.header("Settings")
+        model_type = st.radio("Model Source", ["Custom GPT-2 (Checkpoint)", "Open Source (Hugging Face)"])
+        hf_model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+        if model_type == "Open Source (Hugging Face)":
+            hf_model_name = st.text_input("Hugging Face Model ID", value="Qwen/Qwen2.5-0.5B-Instruct")
+
         max_new_tokens = st.slider(
             "Max New Tokens", min_value=16, max_value=512, value=128, step=16
         )
 
-    # --- モデルのロード ---
-    model_cfg = ModelConfig()
-    checkpoint_path = os.environ.get("CHECKPOINT_PATH", "checkpoints")
-    train_cfg = TrainConfig(checkpoint_path=checkpoint_path)
 
-    try:
-        module, device = load_model(model_cfg, train_cfg)
-    except (FileNotFoundError, OSError) as e:
-        st.error(f"モデルのロードに失敗しました: {e}")
-        st.stop()
+    # --- モデルのロード ---
+    if model_type == "Custom GPT-2 (Checkpoint)":
+        model_cfg = ModelConfig()
+        checkpoint_path = os.environ.get("CHECKPOINT_PATH", "checkpoints")
+        train_cfg = TrainConfig(checkpoint_path=checkpoint_path)
+
+        try:
+            module, device = load_model(model_cfg, train_cfg)
+        except (FileNotFoundError, OSError) as e:
+            st.error(f"モデルのロードに失敗しました: {e}")
+            st.stop()
+    else:
+        try:
+            with st.spinner("Hugging Faceモデルをロード中..."):
+                hf_model, hf_tokenizer, device = load_hf_model(hf_model_name)
+        except Exception as e:
+            st.error(f"HFモデルのロードに失敗しました: {e}")
+            st.stop()
 
     # --- チャット履歴 ---
     if "messages" not in st.session_state:
@@ -129,7 +192,10 @@ def main() -> None:
 
         with st.chat_message("assistant"):
             with st.spinner("生成中..."):
-                response = generate_text(module, device, prompt, max_new_tokens)
+                if model_type == "Custom GPT-2 (Checkpoint)":
+                    response = generate_text(module, device, prompt, max_new_tokens)
+                else:
+                    response = generate_text_hf(hf_model, hf_tokenizer, device, prompt, max_new_tokens)
             st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
