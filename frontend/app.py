@@ -12,14 +12,17 @@ if _project_root not in sys.path:
 import streamlit as st  # noqa: E402
 import tiktoken  # noqa: E402
 import torch  # noqa: E402
+import transformers
 
 from gpt2.config import ModelConfig, TrainConfig  # noqa: E402
 from gpt2.model import GPTLightning  # noqa: E402
 
+transformers.utils.logging.set_verbosity_error()
 
-#---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # モデルのロード（キャッシュ付き）
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 @st.cache_resource
 def load_model(
     model_cfg: ModelConfig,
@@ -34,7 +37,7 @@ def load_model(
             for d in base_dir.iterdir():
                 if d.is_dir() and d.name.startswith("version_"):
                     try:
-                        versions.append(int(d.name[len("version_"):]))
+                        versions.append(int(d.name[len("version_") :]))
                     except ValueError:
                         continue
             if versions:
@@ -65,9 +68,9 @@ def load_model(
     return module, device
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # テキスト生成
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 @torch.no_grad()
 def generate_text(
     module: GPTLightning,
@@ -81,13 +84,13 @@ def generate_text(
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
     # プロンプト部分を除外し、生成部分のみ返す
-    generated_tokens = out[0][len(encoded):].tolist()
+    generated_tokens = out[0][len(encoded) :].tolist()
     return tokenizer.decode(generated_tokens)
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Streamlit UI
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title="GPT-2 Chat", page_icon="🤖", layout="centered")
     st.title("GPT-2 Chat")
@@ -98,7 +101,6 @@ def main() -> None:
         max_new_tokens = st.slider(
             "Max New Tokens", min_value=16, max_value=512, value=128, step=16
         )
-
 
     # --- モデルのロード ---
     model_cfg = ModelConfig()
