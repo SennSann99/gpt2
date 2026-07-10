@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import lightning.pytorch as pl
 from dataclasses import asdict
 from contextlib import nullcontext
+from gpt2.chat import EOS_TOKEN_ID
 from gpt2.manager import MANAGER
 from gpt2.config import ModelConfig
 
@@ -432,13 +433,20 @@ class GPTModel(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, idx: torch.Tensor, max_new_tokens: int) -> torch.Tensor:
+    def generate(
+        self,
+        idx: torch.Tensor,
+        max_new_tokens: int,
+        eos_token_id: int = EOS_TOKEN_ID,
+    ) -> torch.Tensor:
         for _ in range(max_new_tokens):
             idx_cond = idx[:, -self.cfg.block_size :]
             logits, _ = self(idx_cond)
             probs = F.softmax(logits[:, -1, :], dim=-1)
             next_token = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, next_token), dim=1)
+            if (next_token == eos_token_id).all():
+                break
         return idx
 
 
