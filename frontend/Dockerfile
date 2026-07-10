@@ -1,5 +1,7 @@
 # Streamlit フロントエンド用 Dockerfile (CPU)
-FROM python:3.12-slim
+#FROM python:3.12-slim
+# Streamlit フロントエンド用 Dockerfile (GPU)
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
 WORKDIR /workspace
 

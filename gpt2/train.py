@@ -13,6 +13,7 @@ from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
+from gpt2.chat import format_response_prefix, format_training_example
 from gpt2.config import ModelConfig, TrainConfig
 from gpt2.model import GPTLightning
 
@@ -22,17 +23,23 @@ tokenizer.pad_token = tokenizer.eos_token
 
 
 def tokenize_function(examples):
-    # Combine the input and output into a single conversational string
     texts = [
-        f"User: {inp}\nModel: {out}{tokenizer.eos_token}"
+        format_training_example(inp, out, tokenizer.eos_token)
         for inp, out in zip(examples["input"], examples["output"])
     ]
 
-    # Tokenize the combined texts
     tokenized = tokenizer(texts, truncation=True, max_length=128, padding="max_length")
 
-    # Create the labels for GPT-2 causal language modeling
-    tokenized["labels"] = tokenized["input_ids"].copy()
+    # Only train on the assistant reply; ignore user prompt, padding, and truncation.
+    labels = []
+    for i, inp in enumerate(examples["input"]):
+        row = tokenized["input_ids"][i][:]
+        prefix_len = len(tokenizer.encode(format_response_prefix(inp), add_special_tokens=False))
+        for j in range(len(row)):
+            if j < prefix_len or tokenized["attention_mask"][i][j] == 0:
+                row[j] = -100
+        labels.append(row)
+    tokenized["labels"] = labels
 
     return tokenized
 

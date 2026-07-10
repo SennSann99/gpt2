@@ -4,6 +4,7 @@ from pathlib import Path
 import tiktoken
 import torch
 
+from gpt2.chat import format_inference_prompt, strip_generated_response
 from gpt2.config import ModelConfig, TrainConfig
 from gpt2.model import GPTLightning
 
@@ -98,10 +99,12 @@ def generate(
     module.model.eval()
 
     tokenizer = tiktoken.get_encoding("gpt2")
-    encoded = tokenizer.encode(prompt)
+    formatted_prompt = format_inference_prompt(prompt)
+    encoded = tokenizer.encode(formatted_prompt)
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
-    return tokenizer.decode(out[0].tolist())
+    generated_tokens = out[0][len(encoded) :].tolist()
+    return strip_generated_response(tokenizer.decode(generated_tokens))
 
 
 def main() -> None:
