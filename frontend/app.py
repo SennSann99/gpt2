@@ -15,6 +15,7 @@ import torch  # noqa: E402
 import transformers
 
 from gpt2.chat import format_inference_prompt, strip_generated_response  # noqa: E402
+from gpt2.checkpoint import resolve_checkpoint_path  # noqa: E402
 from gpt2.config import ModelConfig, TrainConfig  # noqa: E402
 from gpt2.model import GPTLightning  # noqa: E402
 
@@ -30,34 +31,7 @@ def load_model(
     train_cfg: TrainConfig,
 ) -> tuple[GPTLightning, torch.device]:
     """チェックポイントからモデルをロードし、キャッシュする."""
-    ckpt_path_str = train_cfg.checkpoint_path
-    if ckpt_path_str is None or Path(ckpt_path_str).is_dir():
-        base_dir = Path(ckpt_path_str or "checkpoints")
-        if base_dir.exists():
-            versions = []
-            for d in base_dir.iterdir():
-                if d.is_dir() and d.name.startswith("version_"):
-                    try:
-                        versions.append(int(d.name[len("version_") :]))
-                    except ValueError:
-                        continue
-            if versions:
-                latest_version = max(versions)
-                best_path = base_dir / f"version_{latest_version}" / "best.ckpt"
-                if best_path.exists():
-                    ckpt_path_str = str(best_path)
-                else:
-                    last_path = base_dir / f"version_{latest_version}" / "last.ckpt"
-                    if last_path.exists():
-                        ckpt_path_str = str(last_path)
-
-    if ckpt_path_str is None or not Path(ckpt_path_str).is_file():
-        raise FileNotFoundError(
-            f"Checkpoint not found at {ckpt_path_str}. "
-            "checkpoints/version_N/best.ckpt が存在するか確認してください。"
-        )
-
-    ckpt_path = Path(ckpt_path_str)
+    ckpt_path = resolve_checkpoint_path(train_cfg.checkpoint_path)
     module = GPTLightning.load_from_checkpoint(
         str(ckpt_path),
         model_cfg=model_cfg,

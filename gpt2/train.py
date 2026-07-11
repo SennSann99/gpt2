@@ -204,6 +204,13 @@ def train(
     try:
         trainer.fit(module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
+        # ModelCheckpoint may not run when training stops before a validation event.
+        # Always leave the completed version directory with a usable checkpoint.
+        last_path = version_dir / "last.ckpt"
+        if not last_path.is_file():
+            trainer.save_checkpoint(str(last_path))
+            print(f"[INFO] Saved final checkpoint: {last_path}")
+
     except KeyboardInterrupt:
         if not _SAVING_FINAL:
             handle_signal(None, None)
