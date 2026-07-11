@@ -36,7 +36,14 @@ def tokenize_conversation(
     for message in messages:
         role = message["role"]
         segment = format_chat_message(role, message["content"], tokenizer.eos_token)
-        segment_ids = tokenizer.encode(segment, add_special_tokens=False)
+        # Long source messages are trimmed at the conversation-window level below.
+        # Disable the tokenizer's 1024-token warning because no untrimmed sequence
+        # is ever passed to the 512-token model.
+        segment_ids = tokenizer.encode(
+            segment,
+            add_special_tokens=False,
+            verbose=False,
+        )
         input_ids.extend(segment_ids)
         labels.extend(segment_ids if role == "assistant" else [-100] * len(segment_ids))
 
