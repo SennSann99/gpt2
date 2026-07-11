@@ -23,7 +23,7 @@ GPT-2の内部構造を読みやすいコードで理解し、学習・評価・
 | FFN | SwiGLU + Mixture of Experts（MoE） |
 | MoEルーティング | Top-k routing、capacity制御、補助損失、Router Z-Loss |
 | 学習 | PyTorch Lightning `Trainer` / `LightningModule` |
-| データ | Hugging Face Dataset `arman-bd/guppylm-60k-generic` |
+| データ | マルチターン会話 `HuggingFaceTB/smol-smoltalk` |
 | ロギング | CSV + Weights & Biases（任意） |
 | チェックポイント | `best.ckpt` / `last.ckpt` / `interrupted.ckpt` |
 | UI | Streamlitによる対話型チャット画面 |
@@ -47,7 +47,7 @@ GPT-2の内部構造を読みやすいコードで理解し、学習・評価・
 
 ## 最短で実行する
 
-NVIDIA GPUを搭載したLinuxサーバーでは、次のコマンドだけでDockerイメージのビルド、学習、チェックポイントの読み込み、文章生成まで実行できます。
+NVIDIA GPUを搭載したLinuxサーバーでは、次のコマンドでDockerイメージをビルドし、無制限学習を開始できます。学習は`Ctrl+C`を押すまでエポックを跨いで継続し、停止時に`interrupted.ckpt`を保存します。
 
 ```bash
 git clone https://github.com/SennSann99/gpt2.git
@@ -116,10 +116,10 @@ uv sync --frozen
 | `tmux` | `gpt2`という名前のtmuxセッション内で実行します |
 
 ```bash
-# CPUで学習 + 生成
+# CPUで無制限学習
 ./run.sh
 
-# GPUで学習 + 生成
+# GPUで無制限学習
 ./run.sh gpu
 
 # GPU + WandB
@@ -137,6 +137,8 @@ uv sync --frozen
   --eval-interval 20 \
   --batch-size 2
 ```
+
+進捗バーに現在のエポック、バッチ、ステップ、学習損失が表示されます。自動停止させたい場合のみ、`--max-steps`に正の値を指定してください。
 
 コンテナ終了後も、次のディレクトリはホスト側に保存されます。
 
@@ -269,7 +271,7 @@ WANDB_API_KEY=your_api_key
 checkpoints/
 ├── version_0/
 │   ├── best.ckpt
-│   └── last.ckpt
+│   └── interrupted.ckpt
 └── version_1/
     ├── best.ckpt
     └── last.ckpt
@@ -282,9 +284,11 @@ logs/
 
 | ファイル | 内容 |
 |---|---|
-| `best.ckpt` | `val_loss`が最小になったモデル |
-| `last.ckpt` | 学習完了時の最新モデル |
-| `interrupted.ckpt` | `Ctrl+C`による中断時に保存されたモデル |
+| `best.ckpt` | `val_loss`が改善したときの最良重み。同じファイルを上書き |
+| `last.ckpt` | 正の`--max-steps`を指定した有限実行の最終重み |
+| `interrupted.ckpt` | 無制限学習を`Ctrl+C`で停止したときの最終重み |
+
+チェックポイントにはモデルの重みのみを保存し、OptimizerとSchedulerの状態は含めません。無制限学習中は`best.ckpt`を1つだけ保持し、停止時に`interrupted.ckpt`を追加するため、多数の履歴ファイルは蓄積しません。
 
 ---
 
@@ -308,7 +312,7 @@ logs/
 ├── checkpoints/         # 学習済みモデル（Git管理外）
 ├── logs/                # 学習ログ（Git管理外）
 ├── Dockerfile
-├── main.py              # 学習後に文章生成を実行
+├── main.py              # 学習エントリポイント（有限実行後は生成）
 ├── open_docs.sh
 ├── pyproject.toml
 └── run.sh
@@ -326,12 +330,12 @@ uv run python -m gpt2.train --help
 
 | 引数 | デフォルト | 内容 |
 |---|---:|---|
-| `--block-size` | `256` | コンテキスト長 |
+| `--block-size` | `512` | 会話履歴を含むコンテキスト長 |
 | `--n-layer` | `12` | Transformerレイヤー数 |
 | `--n-head` | `12` | Attention Head数 |
 | `--n-embd` | `768` | 埋め込み次元 |
-| `--batch-size` | `8` | バッチサイズ |
-| `--max-steps` | `100` | 最大学習ステップ数 |
+| `--batch-size` | `2` | バッチサイズ |
+| `--max-steps` | `-1` | 無制限学習。`Ctrl+C`で停止 |
 | `--eval-interval` | `100` | 検証を行う間隔 |
 | `--learning-rate` | `3e-4` | 学習率 |
 | `--checkpoint-path` | `checkpoints` | 保存先ディレクトリ |

@@ -11,7 +11,7 @@
 | 名前 | 型 | 初期値 | 説明 |
 | :--- | :--- | :--- | :--- |
 | `vocab_size` | `int` | `50257` | 語彙数。 |
-| `block_size` | `int` | `256` | 最大の系列長。 |
+| `block_size` | `int` | `512` | 会話履歴を含む最大の系列長。 |
 | `n_layer` | `int` | `12` | Transformer Block の層数。 |
 | `n_head` | `int` | `12` | マルチヘッドアテンションのヘッド数。 |
 | `n_embd` | `int` | `768` | 埋め込みベクトルの次元数。 |
@@ -22,12 +22,10 @@
 
 | 名前 | 型 | 初期値 | 説明 |
 | :--- | :--- | :--- | :--- |
-| `data_path` | `str` | `"data/Papers.csv"` | 学習用データのパス。 |
-| `text_column` | `str` | `"PaperText"` | CSV内の対象テキスト列。 |
 | `limit_rows` | `int` | `0` | 読み込む行数の制限（0は無制限）。 |
 | `val_rows` | `int` | `20` | 検証用データの行数。 |
 | `batch_size` | `int` | `2` | バッチサイズ。 |
-| `max_steps` | `int` | `1000` | 最大訓練ステップ数。 |
+| `max_steps` | `int` | `-1` | 無制限訓練。`Ctrl+C`で停止。 |
 | `eval_interval` | `int` | `100` | 検証の評価間隔（ステップ数）。 |
 | `eval_batches` | `int` | `10` | 検証時に使用するバッチ数。 |
 | `learning_rate` | `float` | `3e-4` | 学習率。 |
@@ -39,27 +37,7 @@
 | `seed` | `int` | `1337` | ランダムシード。 |
 | `num_workers` | `int` | `0` | DataLoader のワーカー数。 |
 | `amp` | `bool` | `True` | 自動混合精度（AMP）の使用フラグ。 |
-| `checkpoint_path` | `str` | `"checkpoints/last.ckpt"` | チェックポイントの保存先。 |
-
----
-
-## gpt2/data.py
-
-データのトークナイズと DataLoader の構築を担当する。
-
-### クラス
-
-| 名前 | 説明 |
-| :--- | :--- |
-| `TokenChunkDataset` | 固定長のトークンチャンクを返す `Dataset` クラス。 |
-| `GPTDataModule` | `LightningDataModule` を継承した、データ供給用の一連のフローを管理するクラス。 |
-
-### 関数
-
-| 名前 | 説明 |
-| :--- | :--- |
-| `_flatten_texts_to_tokens(texts, tokenizer)` | 複数のテキストをエンコードし、一つの大きなトークン ID 列（Tensor）に変換する。 |
-| `build_dataloaders(train_cfg, model_cfg, tokenizer)` | 定義された構成に基づいて訓練・検証用の DataLoader を構築する。 |
+| `checkpoint_path` | `str` | `"checkpoints"` | チェックポイントの保存先。 |
 
 ---
 
@@ -98,6 +76,7 @@
 | 名前 | 説明 |
 | :--- | :--- |
 | `parse_args()` | コマンドライン引数をパースし、`Config` クラスを生成する。 |
+| `tokenize_conversation(messages, max_length)` | マルチターン会話をトークン化し、Assistant部分の学習ラベルを作成する。 |
 | `train(model_cfg, train_cfg)` | PyTorch Lightning を用いた訓練プロセスを開始する。 |
 | `main()` | `parse_args` と `train` を順に呼び出す。 |
 

@@ -18,7 +18,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
         default=None,
         help="Path to checkpoint (e.g. checkpoints/version_0/best.ckpt). If None, tries to find the latest version's best.ckpt",
     )
-    parser.add_argument("--block-size", type=int, default=256)
+    parser.add_argument("--block-size", type=int, default=512)
     parser.add_argument("--n-layer", type=int, default=12)
     parser.add_argument("--n-head", type=int, default=12)
     parser.add_argument("--n-embd", type=int, default=768)
@@ -74,8 +74,9 @@ def generate(
     module.model.eval()
 
     tokenizer = tiktoken.get_encoding("gpt2")
-    formatted_prompt = format_inference_prompt(prompt)
-    encoded = tokenizer.encode(formatted_prompt)
+    messages = [{"role": "user", "content": prompt}]
+    formatted_prompt = format_inference_prompt(messages)
+    encoded = tokenizer.encode(formatted_prompt)[-model_cfg.block_size :]
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
     generated_tokens = out[0][len(encoded) :].tolist()

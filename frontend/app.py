@@ -50,13 +50,13 @@ def load_model(
 def generate_text(
     module: GPTLightning,
     device: torch.device,
-    prompt: str,
+    messages: list[dict[str, str]],
     max_new_tokens: int,
 ) -> str:
-    """プロンプトからテキストを生成する."""
+    """会話履歴からテキストを生成する."""
     tokenizer = tiktoken.get_encoding("gpt2")
-    formatted_prompt = format_inference_prompt(prompt)
-    encoded = tokenizer.encode(formatted_prompt)
+    formatted_prompt = format_inference_prompt(messages)
+    encoded = tokenizer.encode(formatted_prompt)[-module.model.cfg.block_size :]
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
     generated_tokens = out[0][len(encoded) :].tolist()
@@ -103,7 +103,12 @@ def main() -> None:
 
         with st.chat_message("assistant"):
             with st.spinner("生成中..."):
-                response = generate_text(module, device, prompt, max_new_tokens)
+                response = generate_text(
+                    module,
+                    device,
+                    st.session_state.messages,
+                    max_new_tokens,
+                )
             st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
 

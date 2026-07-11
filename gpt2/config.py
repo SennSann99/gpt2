@@ -17,7 +17,7 @@ Adding slots=True tells Python: "I am only going to use exactly these variables,
 @dataclass(slots=True)
 class ModelConfig:
     vocab_size: int = 50257
-    block_size: int = 256
+    block_size: int = 512
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
@@ -45,7 +45,7 @@ class TrainConfig:
     limit_rows: int = 0
     val_rows: int = 20
     batch_size: int = 2
-    max_steps: int = 1000
+    max_steps: int = -1
     eval_interval: int = 100
     eval_batches: int = 10
     learning_rate: float = 3e-4

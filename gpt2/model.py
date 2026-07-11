@@ -429,7 +429,14 @@ class GPTModel(nn.Module):
 
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            # Predict token n+1 from tokens up to n. Padding and non-assistant
+            # targets use -100 and are ignored by cross_entropy.
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_targets = targets[:, 1:].contiguous()
+            loss = F.cross_entropy(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_targets.view(-1),
+            )
         return logits, loss
 
     @torch.no_grad()
@@ -504,6 +511,14 @@ class GPTLightning(pl.LightningModule):
         
         _, loss = self.model(x, y)
         self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log(
+            "step",
+            float(self.global_step),
+            prog_bar=True,
+            logger=False,
+            on_step=True,
+            on_epoch=False,
+        )
         return loss
 
     def validation_step(self, batch, batch_idx: int) -> None:

@@ -8,12 +8,16 @@ from pathlib import Path
 import lightning.pytorch as pl
 import torch
 from datasets import load_dataset
-from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+from lightning.pytorch.callbacks import (
+    LearningRateMonitor,
+    ModelCheckpoint,
+    TQDMProgressBar,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from gpt2.chat import format_response_prefix, format_training_example
+from gpt2.chat import format_chat_message
 from gpt2.config import ModelConfig, TrainConfig
 from gpt2.model import GPTLightning
 
@@ -22,26 +26,52 @@ tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
 tokenizer.pad_token = tokenizer.eos_token
 
 
-def tokenize_function(examples):
-    texts = [
-        format_training_example(inp, out, tokenizer.eos_token)
-        for inp, out in zip(examples["input"], examples["output"])
+def tokenize_conversation(
+    messages: list[dict[str, str]], max_length: int
+) -> dict[str, list[int]]:
+    """Tokenize a complete conversation and train only on assistant messages."""
+    input_ids: list[int] = []
+    labels: list[int] = []
+
+    for message in messages:
+        role = message["role"]
+        segment = format_chat_message(role, message["content"], tokenizer.eos_token)
+        segment_ids = tokenizer.encode(segment, add_special_tokens=False)
+        input_ids.extend(segment_ids)
+        labels.extend(segment_ids if role == "assistant" else [-100] * len(segment_ids))
+
+    supervised_positions = [i for i, label in enumerate(labels) if label != -100]
+    if not supervised_positions:
+        raise ValueError("Conversation does not contain an assistant message")
+
+    # End the window at the newest assistant response. This preserves recent
+    # history without producing an all-ignored target for a trailing long user turn.
+    window_end = supervised_positions[-1] + 1
+    window_start = max(0, window_end - max_length)
+    input_ids = input_ids[window_start:window_end]
+    labels = labels[window_start:window_end]
+    attention_mask = [1] * len(input_ids)
+
+    padding_length = max_length - len(input_ids)
+    input_ids.extend([tokenizer.pad_token_id] * padding_length)
+    attention_mask.extend([0] * padding_length)
+    labels.extend([-100] * padding_length)
+
+    return {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": labels,
+    }
+
+
+def tokenize_function(examples, max_length: int):
+    tokenized = [
+        tokenize_conversation(messages, max_length) for messages in examples["messages"]
     ]
-
-    tokenized = tokenizer(texts, truncation=True, max_length=128, padding="max_length")
-
-    # Only train on the assistant reply; ignore user prompt, padding, and truncation.
-    labels = []
-    for i, inp in enumerate(examples["input"]):
-        row = tokenized["input_ids"][i][:]
-        prefix_len = len(tokenizer.encode(format_response_prefix(inp), add_special_tokens=False))
-        for j in range(len(row)):
-            if j < prefix_len or tokenized["attention_mask"][i][j] == 0:
-                row[j] = -100
-        labels.append(row)
-    tokenized["labels"] = labels
-
-    return tokenized
+    return {
+        key: [conversation[key] for conversation in tokenized]
+        for key in ("input_ids", "attention_mask", "labels")
+    }
 
 
 def get_next_version(root_dir: str, prefix: str = "version_") -> int:
@@ -64,22 +94,23 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
         description="Train a compact GPT-2 model (Lightning)"
     )
 
-    parser.add_argument("--data-path", default="data/Papers.csv")
-    parser.add_argument("--text-column", default="PaperText")
     parser.add_argument("--limit-rows", type=int, default=0)
     parser.add_argument("--val-rows", type=int, default=20)
 
-    parser.add_argument("--block-size", type=int, default=256)
+    parser.add_argument("--block-size", type=int, default=512)
     parser.add_argument("--n-layer", type=int, default=12)
     parser.add_argument("--n-head", type=int, default=12)
     parser.add_argument("--n-embd", type=int, default=768)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--bias", action="store_true")
 
+    parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument(
-        "--batch-size", type=int, default=8
-    )  # Updated default to 8 based on previous steps
-    parser.add_argument("--max-steps", type=int, default=100)
+        "--max-steps",
+        type=int,
+        default=-1,
+        help="Maximum training steps. Use -1 (default) to train until Ctrl+C.",
+    )
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-batches", type=int, default=10)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
@@ -154,7 +185,9 @@ def train(
         monitor="val_loss",
         mode="min",
         save_top_k=1,
-        save_last=True,
+        save_last=False,
+        save_weights_only=True,
+        enable_version_counter=False,
     )
 
     loggers = [CSVLogger(save_dir="logs", name="gpt2", version=version)]
@@ -167,14 +200,20 @@ def train(
     trainer = pl.Trainer(
         accelerator="auto",
         devices="auto",
+        max_epochs=-1,
         max_steps=train_cfg.max_steps,
         val_check_interval=train_cfg.eval_interval,
         limit_val_batches=train_cfg.eval_batches,
         logger=loggers,
-        callbacks=[checkpoint_cb, LearningRateMonitor(logging_interval="step")],
+        callbacks=[
+            checkpoint_cb,
+            LearningRateMonitor(logging_interval="step"),
+            TQDMProgressBar(refresh_rate=1),
+        ],
         gradient_clip_val=train_cfg.grad_clip,
         precision=precision,
         log_every_n_steps=1,
+        enable_progress_bar=True,
     )
 
     def handle_signal(sig, frame):
@@ -191,7 +230,7 @@ def train(
         sys.stdout.flush()
 
         try:
-            trainer.save_checkpoint(str(interrupted_path))
+            trainer.save_checkpoint(str(interrupted_path), weights_only=True)
             print(f"[INFO] 保存が完了しました: {interrupted_path.name}")
         except Exception as e:
             print(f"[ERROR] 保存失敗: {e}")
@@ -208,7 +247,7 @@ def train(
         # Always leave the completed version directory with a usable checkpoint.
         last_path = version_dir / "last.ckpt"
         if not last_path.is_file():
-            trainer.save_checkpoint(str(last_path))
+            trainer.save_checkpoint(str(last_path), weights_only=True)
             print(f"[INFO] Saved final checkpoint: {last_path}")
 
     except KeyboardInterrupt:
@@ -223,17 +262,30 @@ def main() -> None:
 
     # 2. Load the dataset
     print("Loading dataset...")
-    dataset = load_dataset("arman-bd/guppylm-60k-generic")
+    dataset = load_dataset("HuggingFaceTB/smol-smoltalk")
     train_dataset = dataset["train"]
     val_dataset = dataset["test"]
+
+    if train_cfg.limit_rows > 0:
+        train_dataset = train_dataset.select(
+            range(min(train_cfg.limit_rows, len(train_dataset)))
+        )
+    if train_cfg.val_rows > 0:
+        val_dataset = val_dataset.select(range(min(train_cfg.val_rows, len(val_dataset))))
 
     # 3. Tokenize the datasets
     print("Tokenizing data...")
     tokenized_train = train_dataset.map(
-        tokenize_function, batched=True, remove_columns=train_dataset.column_names
+        tokenize_function,
+        batched=True,
+        fn_kwargs={"max_length": model_cfg.block_size},
+        remove_columns=train_dataset.column_names,
     )
     tokenized_val = val_dataset.map(
-        tokenize_function, batched=True, remove_columns=val_dataset.column_names
+        tokenize_function,
+        batched=True,
+        fn_kwargs={"max_length": model_cfg.block_size},
+        remove_columns=val_dataset.column_names,
     )
 
     # 4. Convert to PyTorch tensors
@@ -247,12 +299,22 @@ def main() -> None:
     # 5. Create DataLoaders
     print("Creating DataLoaders...")
     train_loader = DataLoader(
-        tokenized_train, shuffle=True, batch_size=train_cfg.batch_size
+        tokenized_train,
+        shuffle=True,
+        batch_size=train_cfg.batch_size,
+        num_workers=train_cfg.num_workers,
     )
-    val_loader = DataLoader(tokenized_val, batch_size=train_cfg.batch_size)
+    val_loader = DataLoader(
+        tokenized_val,
+        batch_size=train_cfg.batch_size,
+        num_workers=train_cfg.num_workers,
+    )
 
     # 6. Start training!
-    print("Starting training pipeline...")
+    if train_cfg.max_steps == -1:
+        print("Starting unlimited training. Press Ctrl+C to save and stop.")
+    else:
+        print(f"Starting training for {train_cfg.max_steps} steps.")
     train(model_cfg, train_cfg, train_loader, val_loader)
 
 

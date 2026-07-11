@@ -23,7 +23,7 @@ This project provides a readable GPT-2 implementation for studying the model's i
 | Feed-forward network | SwiGLU + Mixture of Experts (MoE) |
 | MoE routing | Top-k routing, capacity control, auxiliary loss, and Router Z-Loss |
 | Training | PyTorch Lightning `Trainer` / `LightningModule` |
-| Dataset | Hugging Face Dataset `arman-bd/guppylm-60k-generic` |
+| Dataset | Multi-turn `HuggingFaceTB/smol-smoltalk` conversations |
 | Logging | CSV + optional Weights & Biases |
 | Checkpoints | `best.ckpt` / `last.ckpt` / `interrupted.ckpt` |
 | UI | Interactive Streamlit chat interface |
@@ -47,7 +47,7 @@ This project provides a readable GPT-2 implementation for studying the model's i
 
 ## Quick start
 
-On a Linux server with an NVIDIA GPU, the following commands build the Docker image, train the model, load the resulting checkpoint, and generate text:
+On a Linux server with an NVIDIA GPU, the following commands build the Docker image and start unlimited training. Training continues across epochs until you press `Ctrl+C`, which saves `interrupted.ckpt` before exiting:
 
 ```bash
 git clone https://github.com/SennSann99/gpt2.git
@@ -116,10 +116,10 @@ uv sync --frozen
 | `tmux` | Run inside a tmux session named `gpt2` |
 
 ```bash
-# Train on CPU, then generate text
+# Train indefinitely on CPU
 ./run.sh
 
-# Train on GPU, then generate text
+# Train indefinitely on GPU
 ./run.sh gpu
 
 # GPU + WandB
@@ -137,6 +137,8 @@ Training options can be passed through the same script:
   --eval-interval 20 \
   --batch-size 2
 ```
+
+The progress bar displays the current epoch, batch, step, and training loss. Pass a positive `--max-steps` value only when you want an automatic stopping point.
 
 The following host directories persist after the container exits:
 
@@ -269,7 +271,7 @@ Each training run creates a new `version_N` directory:
 checkpoints/
 ├── version_0/
 │   ├── best.ckpt
-│   └── last.ckpt
+│   └── interrupted.ckpt
 └── version_1/
     ├── best.ckpt
     └── last.ckpt
@@ -282,9 +284,11 @@ logs/
 
 | File | Purpose |
 |---|---|
-| `best.ckpt` | Model with the lowest observed `val_loss` |
-| `last.ckpt` | Most recent model at the end of training |
-| `interrupted.ckpt` | Model saved when training is interrupted with `Ctrl+C` |
+| `best.ckpt` | Best weights observed so far; overwritten only when `val_loss` improves |
+| `last.ckpt` | Final weights for a finite run using a positive `--max-steps` |
+| `interrupted.ckpt` | Final weights saved when unlimited training is stopped with `Ctrl+C` |
+
+Checkpoints contain model weights only, without optimizer or scheduler state. An unlimited run therefore keeps at most `best.ckpt` during training and adds `interrupted.ckpt` when stopped, instead of accumulating checkpoint versions.
 
 ---
 
@@ -308,7 +312,7 @@ logs/
 ├── checkpoints/         # Trained models (ignored by Git)
 ├── logs/                # Training logs (ignored by Git)
 ├── Dockerfile
-├── main.py              # Train, then generate text
+├── main.py              # Training entrypoint; generates after finite runs
 ├── open_docs.sh
 ├── pyproject.toml
 └── run.sh
@@ -326,12 +330,12 @@ uv run python -m gpt2.train --help
 
 | Argument | Default | Description |
 |---|---:|---|
-| `--block-size` | `256` | Context length |
+| `--block-size` | `512` | Context length, including conversation history |
 | `--n-layer` | `12` | Number of Transformer layers |
 | `--n-head` | `12` | Number of attention heads |
 | `--n-embd` | `768` | Embedding dimension |
-| `--batch-size` | `8` | Batch size |
-| `--max-steps` | `100` | Maximum training steps |
+| `--batch-size` | `2` | Batch size |
+| `--max-steps` | `-1` | Unlimited training; stop with `Ctrl+C` |
 | `--eval-interval` | `100` | Validation interval |
 | `--learning-rate` | `3e-4` | Learning rate |
 | `--checkpoint-path` | `checkpoints` | Checkpoint output directory |

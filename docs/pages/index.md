@@ -11,10 +11,10 @@
    - Causal Self-Attentionの詳細
 
 2. [**データパイプライン (data_pipeline.md)**](data_pipeline.md)
-   - `data.py` の詳細解説
-   - CSVからのテキスト読み込み
-   - `tiktoken` を用いたトークン化処理
-   - PyTorch Lightning用 `GPTDataModule` の構築
+   - Smol-SmolTalkのマルチターン会話の読み込み
+   - GPT-2トークナイザによる会話履歴のトークン化
+   - Assistant応答のみを学習対象とするラベル作成
+   - PyTorch `DataLoader`の構築
 
 3. [**学習と生成ループ (training_and_generation.md)**](training_and_generation.md)
    - `train.py` および `generate.py` の詳細解説
