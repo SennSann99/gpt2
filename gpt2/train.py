@@ -79,7 +79,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig]:
     parser.add_argument(
         "--batch-size", type=int, default=8
     )  # Updated default to 8 based on previous steps
-    parser.add_argument("--max-steps", type=int, default=1000)
+    parser.add_argument("--max-steps", type=int, default=100)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--eval-batches", type=int, default=10)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
