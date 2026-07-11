@@ -1,140 +1,157 @@
-# Compact GPT-2 (PyTorch Lightning)
+<div align="center">
 
-## News
+# Compact GPT-2 ⚡
 
-| Date | Update |
+**A compact GPT-2 + Mixture of Experts implementation for learning, research, and experimentation with PyTorch Lightning**
+
+[日本語](README_jp.md) · [Documentation](docs/index.html) · [Problem Report](docs/problem-report.html)
+
+</div>
+
+---
+
+## About this project
+
+This project provides a readable GPT-2 implementation for studying the model's internals and running the complete training, evaluation, and text-generation workflow. PyTorch Lightning keeps experiment configuration, logging, checkpointing, and CPU/GPU execution straightforward.
+
+### Highlights
+
+| Area | Implementation |
 |---|---|
-| 2026-03-15 | Replaced positional encoding with Rotary Position Embedding (RoPE) |
-| 2026-04-16 | Integrated Weights & Biases (WandB) for web-based monitoring |
-
-
-
-A minimal, research-oriented GPT-2 implementation designed for graduate-level AI work — clear internals, reproducible experiments, and clean scaling paths via PyTorch Lightning.
-
----
-
-## Motivation
-
-- Study the core mechanics of GPT-2 through readable, minimal code.
-- Iterate quickly with clean dataclass configs and a straightforward CLI.
-- Keep multi-GPU / distributed training paths open without rewriting the training loop.
+| Model | GPT-2-style causal Transformer |
+| Position encoding | Rotary Position Embedding (RoPE) |
+| Feed-forward network | SwiGLU + Mixture of Experts (MoE) |
+| MoE routing | Top-k routing, capacity control, auxiliary loss, and Router Z-Loss |
+| Training | PyTorch Lightning `Trainer` / `LightningModule` |
+| Dataset | Hugging Face Dataset `arman-bd/guppylm-60k-generic` |
+| Logging | CSV + optional Weights & Biases |
+| Checkpoints | `best.ckpt` / `last.ckpt` / `interrupted.ckpt` |
+| UI | Interactive Streamlit chat interface |
 
 ---
 
-## Features
+## Contents
 
-| Component | detale(詳細) |
-|---|---|
-| Model | GPT-2 style transformer with causal self-attention via `einsum` |
-| Config | Typed dataclasses for model and training hyperparameters |
-| Training | PyTorch Lightning `Trainer` + `LightningModule` |
-| Optimizer | AdamW with parameter group weight decay + linear warmup |
-| Tokenization | `tiktoken` (GPT-2 encoding) |
-| Logging | CSV logger to `logs/` + **WandB (Weights & Biases)** |
-| Reproducibility | Deterministic seeding |
+- [Quick start](#quick-start)
+- [Requirements](#requirements)
+- [Running the project](#running-the-project)
+- [Generating from a trained model](#generating-from-a-trained-model)
+- [Launching the chat UI](#launching-the-chat-ui)
+- [Configuring WandB](#configuring-wandb)
+- [Checkpoints and logs](#checkpoints-and-logs)
+- [Project structure](#project-structure)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## Project Structure
+## Quick start
 
+On a Linux server with an NVIDIA GPU, the following commands build the Docker image, train the model, load the resulting checkpoint, and generate text:
+
+```bash
+git clone https://github.com/SennSann99/gpt2.git
+cd gpt2
+git switch sen/moe
+chmod +x run.sh frontend/run_app.sh open_docs.sh
+./run.sh gpu
 ```
-gpt2/
-├── config.py      # Model and training config dataclasses
-├── data.py        # CSV → token chunks → DataLoaders
-├── model.py       # GPT model + LightningModule
-├── train.py       # Lightning Trainer entrypoint (recommended)
-└── generate.py    # Text generation entrypoint
-main.py            # Convenience entrypoint (train + generate)
+
+To enable WandB, complete the [WandB configuration](#configuring-wandb) first, then run:
+
+```bash
+./run.sh gpu wandb
 ```
+
+> [!NOTE]
+> The first run can take some time because Docker dependencies, the GPT-2 tokenizer, and the training dataset must be downloaded.
 
 ---
 
 ## Requirements
 
-- Python ≥ 3.12
-- [`uv`](https://github.com/astral-sh/uv) (recommended) or `pip`
-- PyTorch ≥ 2.5, Lightning ≥ 2.6
+### Docker workflow (recommended)
 
-Install dependencies:
+- Git
+- Docker
+- For NVIDIA GPU execution:
+  - NVIDIA Driver
+  - NVIDIA Container Toolkit
+
+Confirm that Docker can access the GPU:
 
 ```bash
-uv sync
+nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 ```
+
+### Local workflow
+
+- Python 3.12 or newer
+- [`uv`](https://docs.astral.sh/uv/)
+- PyTorch 2.5 or newer
+- PyTorch Lightning 2.6 or newer
+
+Install the locked dependencies:
+
+```bash
+uv sync --frozen
+```
+
+> [!IMPORTANT]
+> An internet connection is required on the first run to download the dataset and tokenizer from Hugging Face.
 
 ---
 
-## Documentation
+## Running the project
 
-A local documentation server is provided to browse project details and research notes.
+### 1. Run with `run.sh` (recommended)
 
-```bash
-./open_docs.sh
-```
-
-- **Port**: Default is 8080.
-- **Auto-open**: The script attempts to open your default browser automatically. If it doesn't open, manually access [http://localhost:8080](http://localhost:8080).
-- **No-cache**: The server is configured to prevent caching, ensuring you always see the latest content.
-
----
-
-### Option 1: Using run.sh (Recommended)
-
-The `run.sh` script automates image building and container execution. It supports multiple options that can be combined in any order.
-
-### Available Options
+`run.sh` automates the Docker build and container startup. Its options can be combined in any order.
 
 | Option | Description |
 |---|---|
-| `gpu` | Enable NVIDIA GPU support (requires NVIDIA Container Toolkit) |
-| `tmux` | Start a new background `tmux` session named `gpt2` |
-| `wandb` | Enable Web monitoring via **Weights & Biases** (requires `.env` file) |
-
-### Usage Examples
+| `gpu` | Enable NVIDIA GPU support |
+| `wandb` | Send training metrics to Weights & Biases |
+| `tmux` | Run inside a tmux session named `gpt2` |
 
 ```bash
-# Basic run (CPU)
+# Train on CPU, then generate text
 ./run.sh
 
-# Enable specific features
+# Train on GPU, then generate text
 ./run.sh gpu
-./run.sh wandb
-./run.sh tmux
 
-# Combine options (any order)
+# GPU + WandB
 ./run.sh gpu wandb
-./run.sh gpu tmux wandb
+
+# GPU + WandB + tmux
+./run.sh gpu wandb tmux
 ```
 
-- **Combining Options**: You can pass any combination of these keywords. For example, `./run.sh wandb gpu` is the same as `./run.sh gpu wandb`.
-- **Auto-Cleanup**: The `--rm` flag ensures the container is removed after it stops.
-- **Persistence**: Volumes (`logs/`, `checkpoints/`, `data/`) are automatically mounted.
-
-### Option 2: Manual Commands
+Training options can be passed through the same script:
 
 ```bash
-# Build
-docker build -t gpt2 .
-
-# Run with GPU and automatic removal
-docker run --rm -it --gpus all gpt2
-```
-
----
-
-## Quick Start (uv)
-
-```bash
-uv run python -m gpt2.train \
+./run.sh gpu \
   --max-steps 200 \
   --eval-interval 20 \
   --batch-size 2
 ```
 
-### Smoke Test (fast sanity check)
+The following host directories persist after the container exits:
+
+```text
+checkpoints/    Trained model checkpoints
+logs/           CSV training logs
+data/           Local data workspace
+```
+
+### 2. Run a short smoke test
+
+Use a small model and a few training steps to verify the training pipeline:
 
 ```bash
-uv run python -m gpt2.train \
-  --limit-rows 40 \
+./run.sh gpu \
   --block-size 64 \
   --n-layer 2 \
   --n-head 2 \
@@ -145,55 +162,269 @@ uv run python -m gpt2.train \
   --eval-batches 1
 ```
 
----
+### 3. Train without Docker
 
-## Data Format
+```bash
+uv run python -m gpt2.train \
+  --max-steps 200 \
+  --eval-interval 20 \
+  --batch-size 2
+```
 
-- Expects a CSV file with a `PaperText` column (e.g., academic abstracts or full papers).
-- Default dataset path: `data/Papers.csv`
+### 4. Use Docker directly
 
----
+```bash
+docker build -t gpt2 .
 
-## Outputs
-
-| Artifact | Path |
-|---|---|
-| Checkpoints | `checkpoints/version_{n}/` |
-| Training logs | `logs/version_{n}/` |
-
-### Checkpoint Rules
-
-Checkpoints are organized into `version_{n}` directories for each run.
-
-| Filename | Condition |
-|---|---|
-| `best.ckpt` | Model state with the minimum `val_loss` |
-| `last.ckpt` | Always the most recent model state |
-| `interrupted.ckpt` | Model state when training is interrupted (e.g., Ctrl+C) |
-
-※ When running `generate.py`, it will automatically look for and load `best.ckpt` from the latest version directory if no explicit path is given.
-| Web Monitoring | [Weights & Biases](https://wandb.ai/) |
+docker run --rm --init -it --gpus all \
+  -v "$PWD/logs:/workspace/logs" \
+  -v "$PWD/checkpoints:/workspace/checkpoints" \
+  -v "$PWD/data:/workspace/data" \
+  gpt2
+```
 
 ---
 
-## WandB Setup
+## Generating from a trained model
 
-To enable web-based monitoring:
+Pass the checkpoint directory to automatically select the newest valid checkpoint:
 
-1. Create a free account at [wandb.ai](https://wandb.ai/).
-2. Get your API Key from your settings.
+```bash
+uv run python -m gpt2.generate \
+  --checkpoint-path checkpoints \
+  --prompt "The future of artificial intelligence"
+```
+
+To use a specific checkpoint, pass its complete path:
+
+```bash
+uv run python -m gpt2.generate \
+  --checkpoint-path checkpoints/version_0/best.ckpt \
+  --prompt "The future of artificial intelligence" \
+  --max-new-tokens 128
+```
+
+Automatic selection searches version directories from newest to oldest using this priority:
+
+1. `best.ckpt`
+2. `last.ckpt`
+3. `interrupted.ckpt`
+
+If the newest version directory is empty, the loader automatically falls back to an older valid checkpoint.
+
+---
+
+## Launching the chat UI
+
+After training, launch the Streamlit chat interface in Docker:
+
+```bash
+frontend/run_app.sh checkpoints
+```
+
+Open the following URL in a browser:
+
+```text
+http://localhost:8501
+```
+
+To load a specific checkpoint:
+
+```bash
+frontend/run_app.sh checkpoints/version_0/best.ckpt
+```
+
+> [!NOTE]
+> The current `frontend/run_app.sh` uses `--gpus all`, so it requires an NVIDIA GPU and NVIDIA Container Toolkit.
+
+---
+
+## Configuring WandB
+
+1. Create an account at [Weights & Biases](https://wandb.ai/).
+2. Copy your API key from the WandB settings page.
 3. Create a `.env` file in the project root:
-   ```env
-   WANDB_ENTITY=our_entity_here
-   WANDB_API_KEY=your_api_key_here
-   ```
-4. Run training with the `wandb` flag:
-   ```bash
-   ./run.sh gpu wandb
-   ```
+
+```dotenv
+WANDB_ENTITY=your_entity_name
+WANDB_API_KEY=your_api_key
+```
+
+4. Run with the `wandb` option:
+
+```bash
+./run.sh gpu wandb
+```
+
+> [!WARNING]
+> Never commit `.env`. It is already excluded by this repository's `.gitignore`.
 
 ---
 
-## Parallelism
+## Checkpoints and logs
 
-Training is built on PyTorch Lightning, so scaling from a single CPU/GPU to multi-GPU DDP requires no changes to the training loop. Lightning handles device placement, DDP setup, and mixed precision automatically.
+Each training run creates a new `version_N` directory:
+
+```text
+checkpoints/
+├── version_0/
+│   ├── best.ckpt
+│   └── last.ckpt
+└── version_1/
+    ├── best.ckpt
+    └── last.ckpt
+
+logs/
+└── gpt2/
+    ├── version_0/
+    └── version_1/
+```
+
+| File | Purpose |
+|---|---|
+| `best.ckpt` | Model with the lowest observed `val_loss` |
+| `last.ckpt` | Most recent model at the end of training |
+| `interrupted.ckpt` | Model saved when training is interrupted with `Ctrl+C` |
+
+---
+
+## Project structure
+
+```text
+.
+├── gpt2/
+│   ├── chat.py          # Chat formatting for training and inference
+│   ├── checkpoint.py    # Checkpoint discovery
+│   ├── config.py        # Model and training configuration
+│   ├── generate.py      # Text generation
+│   ├── manager.py       # MoE auxiliary-loss management
+│   ├── model.py         # GPT-2, RoPE, SwiGLU, and MoE
+│   └── train.py         # Data processing and training
+├── frontend/
+│   ├── app.py           # Streamlit application
+│   ├── Dockerfile
+│   └── run_app.sh       # UI startup script
+├── docs/                # Local documentation
+├── checkpoints/         # Trained models (ignored by Git)
+├── logs/                # Training logs (ignored by Git)
+├── Dockerfile
+├── main.py              # Train, then generate text
+├── open_docs.sh
+├── pyproject.toml
+└── run.sh
+```
+
+---
+
+## Configuration
+
+Common training settings can be changed from the command line:
+
+```bash
+uv run python -m gpt2.train --help
+```
+
+| Argument | Default | Description |
+|---|---:|---|
+| `--block-size` | `256` | Context length |
+| `--n-layer` | `12` | Number of Transformer layers |
+| `--n-head` | `12` | Number of attention heads |
+| `--n-embd` | `768` | Embedding dimension |
+| `--batch-size` | `8` | Batch size |
+| `--max-steps` | `100` | Maximum training steps |
+| `--eval-interval` | `100` | Validation interval |
+| `--learning-rate` | `3e-4` | Learning rate |
+| `--checkpoint-path` | `checkpoints` | Checkpoint output directory |
+| `--no-amp` | Disabled | Disable mixed-precision training |
+
+Advanced MoE settings are defined in `ModelConfig` inside `gpt2/config.py`.
+
+| Setting | Default | Description |
+|---|---:|---|
+| `n_exp` | `8` | Number of experts; `1` uses a standard MLP |
+| `top_k` | `2` | Experts selected for each token |
+| `stride` | `2` | Interval between MoE layers |
+| `train_capacity` | `1.25` | Expert capacity factor during training |
+| `eval_capacity` | `2.0` | Expert capacity factor during evaluation |
+
+---
+
+## Local documentation
+
+```bash
+./open_docs.sh
+```
+
+Open [http://localhost:8080](http://localhost:8080) after the server starts. Press `Ctrl+C` in the terminal to stop it.
+
+---
+
+## Troubleshooting
+
+### No checkpoint was found
+
+List saved checkpoint files:
+
+```bash
+find checkpoints -maxdepth 2 -type f -name '*.ckpt' -print
+```
+
+If a file exists, pass its path explicitly:
+
+```bash
+uv run python -m gpt2.generate \
+  --checkpoint-path checkpoints/version_0/best.ckpt
+```
+
+### Docker cannot access the GPU
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+```
+
+If this fails, verify the NVIDIA Driver and NVIDIA Container Toolkit installation.
+
+### WandB is not enabled
+
+Check the `.env` configuration:
+
+```bash
+grep -E '^(WANDB_ENTITY|WANDB_API_KEY)=' .env
+```
+
+Do not paste your API key into screenshots, logs, or GitHub issues.
+
+### Git rejects a push as non-fast-forward
+
+Rebase your local work onto the remote branch before pushing:
+
+```bash
+git fetch origin
+git rebase origin/sen/moe
+git push --set-upstream origin sen/moe
+```
+
+If conflicts occur, resolve them and continue:
+
+```bash
+git add -u
+git rebase --continue
+```
+
+---
+
+## News
+
+| Date | Update |
+|---|---|
+| 2026-03-15 | Replaced positional encoding with Rotary Position Embedding (RoPE) |
+| 2026-04-16 | Added web-based monitoring with Weights & Biases |
+| 2026-07-11 | Integrated MoE, chat formatting, and robust checkpoint discovery |
+
+---
+
+<div align="center">
+
+**Read the code. Run the experiment. Understand the model.**
+
+</div>
