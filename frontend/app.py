@@ -14,7 +14,11 @@ import tiktoken  # noqa: E402
 import torch  # noqa: E402
 import transformers
 
-from gpt2.chat import format_inference_prompt, strip_generated_response  # noqa: E402
+from gpt2.chat import (
+    END_OF_TEXT,
+    format_inference_prompt,
+    strip_generated_response,
+)
 from gpt2.checkpoint import resolve_checkpoint_path  # noqa: E402
 from gpt2.config import ModelConfig, TrainConfig  # noqa: E402
 from gpt2.model import GPTLightning  # noqa: E402
@@ -56,7 +60,10 @@ def generate_text(
     """会話履歴からテキストを生成する."""
     tokenizer = tiktoken.get_encoding("gpt2")
     formatted_prompt = format_inference_prompt(messages)
-    encoded = tokenizer.encode(formatted_prompt)[-module.model.cfg.block_size :]
+    encoded = tokenizer.encode(
+        formatted_prompt,
+        allowed_special={END_OF_TEXT},
+    )[-module.model.cfg.block_size :]
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
     generated_tokens = out[0][len(encoded) :].tolist()
