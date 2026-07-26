@@ -17,13 +17,13 @@ Pythonの標準機能である `argparse` を用いて、CLI経由で多数の�
 ### 2. インスタンスの初期化と構成
 以下の必要なコンポーネントが実体化される。
 - 再現性の確保 (`pl.seed_everything`)
-- トークナイザー (`tiktoken`)
-- データモジュール (`GPTDataModule`)
+- トークナイザー (`AutoTokenizer` / GPT-2)
+- Smol-SmolTalkのマルチターン会話用`DataLoader`
 - モデルモジュール (`GPTLightning`)
 
 ### 3. コールバック (Callbacks) とロギング
 学習を監視・安定化させるための各種コールバックを設定する。
-- **ModelCheckpoint**: 検証損失 (`val_loss`) をモニタリングし、最新のエポック・ステップのチェックポイント（`last.ckpt`）を自動保存する。
+- **ModelCheckpoint**: 検証損失 (`val_loss`) が改善したときの重みを`best.ckpt`へ上書き保存する。Optimizer状態は保存しない。
 - **LearningRateMonitor**: スケジューラの指示に従って変化する学習率をトラッキングする。
 - **CSVLogger**: 実験結果や損失の推移などを、 TensorBoard とも完全互換性のある `logs/` ディレクトリ配下に直接CSV形式でシリアライズする。
 
@@ -36,19 +36,22 @@ Pythonの標準機能である `argparse` を用いて、CLI経由で多数の�
     trainer = pl.Trainer(
         accelerator="auto",
         devices="auto",
+        max_epochs=-1,
         max_steps=train_cfg.max_steps,
         val_check_interval=train_cfg.eval_interval,
         limit_val_batches=train_cfg.eval_batches,
         logger=logger,
-        callbacks=[checkpoint_cb, LearningRateMonitor(logging_interval="step")],
+        callbacks=[checkpoint_cb, LearningRateMonitor(logging_interval="step"), progress_bar],
         gradient_clip_val=train_cfg.grad_clip,
         precision=precision,
         log_every_n_steps=1,
     )
 
-    # 用意したモデル構造とデータモジュールを渡して訓練スタート
-    trainer.fit(module, datamodule=datamodule)
+    # 有限のDataLoaderをエポックごとに繰り返し、Ctrl+Cまで学習
+    trainer.fit(module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 ```
+
+`max_epochs=-1`かつ`max_steps=-1`がデフォルトのため、学習は`Ctrl+C`を押すまで継続する。停止時は`interrupted.ckpt`を保存する。進捗バーには学習ステップと`train_loss`が表示される。
 
 ---
 

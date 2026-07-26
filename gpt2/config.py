@@ -17,20 +17,35 @@ Adding slots=True tells Python: "I am only going to use exactly these variables,
 @dataclass(slots=True)
 class ModelConfig:
     vocab_size: int = 50257
-    block_size: int = 256
+    block_size: int = 512
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.1
     bias: bool = False
 
+    # MoE-related configs 
+    n_exp: int = 8 # if n_exp = 1 we just use regular MLP layers
+    top_k: int = 2
+    use_aux_loss: bool = False # apply auxiliary loss (from Switch Transformer) in router
+    use_router_z_loss: bool = False # apply router z loss (from ST-MoE)
+    use_noisy_top_k: bool = False
+    aux_loss_weight: float = 0.01 # default setting from Switch Transformer (see top of page 8)
+    router_z_loss_weight: float = 0.001 # default setting from ST-MoE (see page 8 eq. 6)
+    train_capacity: float = 1.25  # default setting from ST-MoE (see top of page 6)
+    eval_capacity: float = 2.0
+    min_capacity: int = 4  # minimum batch size to send to any single expert
+    stride: int = 2 # one in every stride layers are converted to an MoE
+    use_switch_tfm_init: bool = False  # use weight init scheme from Switch Transformer
+    switch_tfm_init_scale: float = 1.0
+    router_use_full_prec: bool = False  # use float32 precision in the router
 
 @dataclass(slots=True)
 class TrainConfig:
     limit_rows: int = 0
     val_rows: int = 20
     batch_size: int = 2
-    max_steps: int = 1000
+    max_steps: int = -1
     eval_interval: int = 100
     eval_batches: int = 10
     learning_rate: float = 3e-4

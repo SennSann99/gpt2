@@ -14,6 +14,12 @@ import tiktoken  # noqa: E402
 import torch  # noqa: E402
 import transformers
 
+from gpt2.chat import (
+    END_OF_TEXT,
+    format_inference_prompt,
+    strip_generated_response,
+)
+from gpt2.checkpoint import resolve_checkpoint_path  # noqa: E402
 from gpt2.config import ModelConfig, TrainConfig  # noqa: E402
 from gpt2.model import GPTLightning  # noqa: E402
 
@@ -29,34 +35,7 @@ def load_model(
     train_cfg: TrainConfig,
 ) -> tuple[GPTLightning, torch.device]:
     """チェックポイントからモデルをロードし、キャッシュする."""
-    ckpt_path_str = train_cfg.checkpoint_path
-    if ckpt_path_str is None or Path(ckpt_path_str).is_dir():
-        base_dir = Path(ckpt_path_str or "checkpoints")
-        if base_dir.exists():
-            versions = []
-            for d in base_dir.iterdir():
-                if d.is_dir() and d.name.startswith("version_"):
-                    try:
-                        versions.append(int(d.name[len("version_") :]))
-                    except ValueError:
-                        continue
-            if versions:
-                latest_version = max(versions)
-                best_path = base_dir / f"version_{latest_version}" / "best.ckpt"
-                if best_path.exists():
-                    ckpt_path_str = str(best_path)
-                else:
-                    last_path = base_dir / f"version_{latest_version}" / "last.ckpt"
-                    if last_path.exists():
-                        ckpt_path_str = str(last_path)
-
-    if ckpt_path_str is None or not Path(ckpt_path_str).is_file():
-        raise FileNotFoundError(
-            f"Checkpoint not found at {ckpt_path_str}. "
-            "checkpoints/version_N/best.ckpt が存在するか確認してください。"
-        )
-
-    ckpt_path = Path(ckpt_path_str)
+    ckpt_path = resolve_checkpoint_path(train_cfg.checkpoint_path)
     module = GPTLightning.load_from_checkpoint(
         str(ckpt_path),
         model_cfg=model_cfg,
@@ -75,18 +54,20 @@ def load_model(
 def generate_text(
     module: GPTLightning,
     device: torch.device,
-    prompt: str,
+    messages: list[dict[str, str]],
     max_new_tokens: int,
 ) -> str:
-    """プロンプトからテキストを生成する."""
+    """会話履歴からテキストを生成する."""
     tokenizer = tiktoken.get_encoding("gpt2")
-    encoded = tokenizer.encode(prompt)
+    formatted_prompt = format_inference_prompt(messages)
+    encoded = tokenizer.encode(
+        formatted_prompt,
+        allowed_special={END_OF_TEXT},
+    )[-module.model.cfg.block_size :]
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
-    # プロンプト部分を除外し、生成部分のみ返す
     generated_tokens = out[0][len(encoded) :].tolist()
-    return tokenizer.decode(generated_tokens)
-
+    return strip_generated_response(tokenizer.decode(generated_tokens))
 
 # ---------------------------------------------------------------------------
 # Streamlit UI
@@ -129,7 +110,12 @@ def main() -> None:
 
         with st.chat_message("assistant"):
             with st.spinner("生成中..."):
-                response = generate_text(module, device, prompt, max_new_tokens)
+                response = generate_text(
+                    module,
+                    device,
+                    st.session_state.messages,
+                    max_new_tokens,
+                )
             st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
 

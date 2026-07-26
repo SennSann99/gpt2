@@ -14,7 +14,7 @@ Python 3.10で導入された機能である `slots=True` が使用されてい�
 @dataclass(slots=True)
 class ModelConfig:
     vocab_size: int = 50257
-    block_size: int = 256
+    block_size: int = 512
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
@@ -25,7 +25,7 @@ class ModelConfig:
 | パラメータ | 型 | デフォルト値 | 説明 |
 |---|---|---|---|
 | `vocab_size` | `int` | 50257 | トークナイザ（tiktoken想定）の語彙サイズ |
-| `block_size` | `int` | 256 | アテンションが一度に参照可能なコンテキストウィンドウ（最大系列長） |
+| `block_size` | `int` | 512 | 会話履歴を含む最大コンテキスト長 |
 | `n_layer` | `int` | 12 | Transformerブロックの積み重ね層数 |
 | `n_head` | `int` | 12 | マルチヘッドアテンションのヘッドの数 |
 | `n_embd` | `int` | 768 | トークンの埋め込みベクトルの次元数 |
@@ -39,12 +39,10 @@ class ModelConfig:
 ```python
 @dataclass(slots=True)
 class TrainConfig:
-    data_path: str = "data/Papers.csv"
-    text_column: str = "PaperText"
     limit_rows: int = 0
     val_rows: int = 20
     batch_size: int = 2
-    max_steps: int = 1000
+    max_steps: int = -1
     eval_interval: int = 100
     eval_batches: int = 10
     learning_rate: float = 3e-4
@@ -56,17 +54,15 @@ class TrainConfig:
     seed: int = 1337
     num_workers: int = 0
     amp: bool = True
-    checkpoint_path: str = "checkpoints/last.ckpt"
+    checkpoint_path: str = "checkpoints"
 ```
 
 | パラメータ | 型 | デフォルト値 | 説明 |
 |---|---|---|---|
-| `data_path` | `str` | "data/Papers.csv" | データセット(CSVファイル)のパス |
-| `text_column` | `str` | "PaperText" | アサインするCSVデータのテキストを含む列名 |
 | `limit_rows` | `int` | 0 | 読み込む行数の制限値(0の場合は全てを読む) |
 | `val_rows` | `int` | 20 | 検証用(Validation)に確保するために末尾から切り出す行数 |
 | `batch_size` | `int` | 2 | 学習と評価に使用するバッチサイズ |
-| `max_steps` | `int` | 1000 | トレーニングの最大ステップ数 |
+| `max_steps` | `int` | -1 | 無制限学習。`Ctrl+C`で保存して停止 |
 | `eval_interval` | `int` | 100 | 学習中に評価を実施するステップ間隔 |
 | `eval_batches` | `int` | 10 | 評価時に使用されるバッチの数 |
 | `learning_rate`| `float`| 3e-4 | 最適化のための学習率（Learning Rate）のベース値 |
@@ -78,4 +74,4 @@ class TrainConfig:
 | `seed` | `int` | 1337 | 再現性確保のためのランダムシード |
 | `num_workers` | `int` | 0 | DataLoaderで使用するプロセス（ワーカー）の数 |
 | `amp` | `bool`| True | Automatic Mixed Precision(自動混合精度学習)の有効・無効化 |
-| `checkpoint_path` | `str` | "checkpoints/last.ckpt" | 実行結果とその時点の重みを保存・ロードするパス |
+| `checkpoint_path` | `str` | "checkpoints" | バージョン別チェックポイントの保存先 |

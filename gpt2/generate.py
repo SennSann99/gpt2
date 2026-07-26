@@ -1,9 +1,10 @@
 import argparse
-from pathlib import Path
 
 import tiktoken
 import torch
 
+from gpt2.chat import format_inference_prompt, strip_generated_response
+from gpt2.checkpoint import resolve_checkpoint_path
 from gpt2.config import ModelConfig, TrainConfig
 from gpt2.model import GPTLightning
 
@@ -17,7 +18,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
         default=None,
         help="Path to checkpoint (e.g. checkpoints/version_0/best.ckpt). If None, tries to find the latest version's best.ckpt",
     )
-    parser.add_argument("--block-size", type=int, default=256)
+    parser.add_argument("--block-size", type=int, default=512)
     parser.add_argument("--n-layer", type=int, default=12)
     parser.add_argument("--n-head", type=int, default=12)
     parser.add_argument("--n-embd", type=int, default=768)
@@ -61,32 +62,7 @@ def parse_args() -> tuple[ModelConfig, TrainConfig, str, int]:
 def generate(
     model_cfg: ModelConfig, train_cfg: TrainConfig, prompt: str, max_new_tokens: int
 ) -> str:
-    ckpt_path_str = train_cfg.checkpoint_path
-    if ckpt_path_str is None or Path(ckpt_path_str).is_dir():
-        base_dir = Path(ckpt_path_str or "checkpoints")
-        if base_dir.exists():
-            # version_N フォルダを探して最新のものを取得
-            versions = []
-            for d in base_dir.iterdir():
-                if d.is_dir() and d.name.startswith("version_"):
-                    try:
-                        versions.append(int(d.name[len("version_") :]))
-                    except ValueError:
-                        continue
-            if versions:
-                latest_version = max(versions)
-                best_path = base_dir / f"version_{latest_version}" / "best.ckpt"
-                if best_path.exists():
-                    ckpt_path_str = str(best_path)
-                else:
-                    last_path = base_dir / f"version_{latest_version}" / "last.ckpt"
-                    if last_path.exists():
-                        ckpt_path_str = str(last_path)
-
-    if ckpt_path_str is None or not Path(ckpt_path_str).exists():
-        raise FileNotFoundError(f"Checkpoint not found at {ckpt_path_str}")
-
-    ckpt_path = Path(ckpt_path_str)
+    ckpt_path = resolve_checkpoint_path(train_cfg.checkpoint_path)
     print(f"[INFO] Loading checkpoint from: {ckpt_path}")
     module = GPTLightning.load_from_checkpoint(
         str(ckpt_path),
@@ -98,10 +74,13 @@ def generate(
     module.model.eval()
 
     tokenizer = tiktoken.get_encoding("gpt2")
-    encoded = tokenizer.encode(prompt)
+    messages = [{"role": "user", "content": prompt}]
+    formatted_prompt = format_inference_prompt(messages)
+    encoded = tokenizer.encode(formatted_prompt)[-model_cfg.block_size :]
     idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
     out = module.model.generate(idx, max_new_tokens=max_new_tokens)
-    return tokenizer.decode(out[0].tolist())
+    generated_tokens = out[0][len(encoded) :].tolist()
+    return strip_generated_response(tokenizer.decode(generated_tokens))
 
 
 def main() -> None:

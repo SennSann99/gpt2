@@ -19,8 +19,10 @@ for arg in "$@"; do
     esac
 done
 
-# プロジェクトルートの絶対パスを取得
-PROJECT_ROOT=$(pwd)
+# スクリプトの場所を基準にプロジェクトルートを取得
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR"
+cd "$PROJECT_ROOT"
 
 # 必要なディレクトリの作成
 mkdir -p logs checkpoints data
